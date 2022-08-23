@@ -2,6 +2,8 @@ library(Hmisc)
 library(ggplot2)
 library(patchwork)
 library(dplyr)
+setwd("~/Documents/GitHub/paralytic_polio_estimates/")
+source("simulation_functions.R")
 
 setwd("~/Documents/GitHub/paralytic_polio_estimates/sims/")
 all_res <-  NULL
@@ -57,7 +59,7 @@ traj_para_prop <- para %>% mutate(y=para>0) %>% group_by(t) %>% dplyr::summarize
 p1 <- traj_prop %>% ggplot() + 
     geom_ribbon(aes(x=t,ymin=lower,ymax=upper),alpha=0.25,fill="purple") +
     geom_line(aes(x=t,y=prop),color="purple",size=1) +
-    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.2)) +
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.25)) +
     scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
                  breaks="1 month") +
     theme_classic() +
@@ -70,7 +72,7 @@ p2 <- traj_para_prop %>%
     ggplot() + 
     geom_ribbon(aes(x=t,ymin=lower,ymax=upper),alpha=0.25,fill="orange") +
     geom_line(aes(x=t,y=prop),color="orange",size=1)+
-    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.2))+
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.25))+
     scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
                  breaks="1 month")+
     theme_classic()+
@@ -79,19 +81,100 @@ p2 <- traj_para_prop %>%
     theme(panel.grid.major=element_line(size=0.25,color="grey70"),
           axis.text.x=element_text(angle=45,hjust=1))+
     labs(tag="B")
-p1/p2
+fig1 <- p1/p2
 
+## Generate prior draws for density plots
+n_prior <- 100000
+immune_prop_pars <- get_beta_pars(0.8, 0.05)
+prop_immune <- rbeta(n_prior, immune_prop_pars[1],immune_prop_pars[2])
 
-ggplot(res) + 
-    geom_density(aes(x=Re),fill="blue",alpha=0.25) +
+prob_paralysis_mean <- 1/2000
+prob_paralysis_var <- 1/2000/10
+prob_para <- rnorm(n_prior, prob_paralysis_mean, sqrt(prob_paralysis_var))
+prob_para[prob_para < 0] <- 0
+prob_para[prob_para >1] <- 1
+
+priors <- data.frame(R0 = rlnorm(n_prior,log(1),1),
+                     prop_immune=prop_immune,
+                     prob_paralysis=prob_para) %>%
+    mutate(Re = R0 * prop_immune)
+
+p1 <- ggplot(res) +
+    geom_density(data=priors,aes(x=R0,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=R0,fill="Post-filter"),alpha=0.25) +
     theme_classic() +
-    geom_vline(xintercept=1) +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_fill_manual(name="",
+                       values=c("Prior"="black","Post-filter"="blue")) +
     scale_y_continuous(expand=c(0,0)) +
-    scale_x_continuous(breaks=seq(0,8,by=1))
+    scale_x_continuous(limits=c(0,8),breaks=seq(0,8,by=1)) +
+    xlab("Basic reproductive number R0") +
+    ylab("Density") +
+    labs(tag="A") +
+    theme(legend.position=c(0.8,0.8))
+    
+p2 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=Re,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=Re,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,8),breaks=seq(0,8,by=1))+
+    xlab("Effective reproductive number Re")+
+    ylab("Density")+
+    labs(tag="B")+
+    theme(legend.position="none")
 
-para %>% filter(sim %in% samps) %>% group_by(sim) %>% dplyr::summarize(y=sum(para)) %>%
+p3 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prob_paralysis,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prob_paralysis,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,0.03))+
+    xlab("Infection-paralysis-ratio")+
+    ylab("Density")+
+    labs(tag="C")+
+    theme(legend.position="none")
+
+p4 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prop_immune,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prop_immune,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion initially immune")+
+    ylab("Density")+
+    labs(tag="D")+
+    theme(legend.position="none")
+
+fig2 <- p1 + p2 + p3 + p4 + plot_layout(ncol=2)
+
+## Some estimates
+## Paralysis cases by end of outbreak
+para %>% 
+    group_by(sim) %>% 
+    dplyr::summarize(y=sum(para)) %>%
     ungroup() %>% pull(y) -> x
 mean(x)
 quantile(x,c(0.025,0.1,0.5,0.9,0.975))
 
+## Proportion of outbreaks with more than the initial case of paralysis
 length(x[x > 1])/length(x)
+
+## Proportion of trajectories that have ended by now
+traj %>% filter(sim %in% samps) %>% 
+    group_by(sim) %>% 
+    filter(t >= date_start) %>%
+    dplyr::summarize(y=sum(inc)) %>%
+    ungroup() %>% pull(y) -> y
+mean(y)
+quantile(y,c(0.025,0.1,0.5,0.9,0.975))
+
+## Proportion of outbreaks with more than 100 further cases
+length(y[y > 100])/length(y)
+setwd("~/Documents/GitHub/paralytic_polio_estimates/")
+ggplot2::ggsave("figures/fig1.pdf",fig1,width=7,height=6)
+ggplot2::ggsave("figures/fig2.pdf",fig2,width=7,height=6)

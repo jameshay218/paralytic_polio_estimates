@@ -54,7 +54,7 @@ run_times_long <- trajectories %>% filter(sim %in% use_samps) %>%
     left_join(trajectories) %>%
     group_by(sim) %>%
     filter(t >= (tmax - x)) %>%
-    summarize(sum_final_infs = sum(inc)) %>%
+    dplyr::summarize(sum_final_infs = sum(inc)) %>%
     mutate(ongoing_10= sum_final_infs != 0)
 
 ## Get parameters
@@ -80,6 +80,21 @@ if(length(use_samps) > 1){
     traj_future_par <- res2$res_par
     save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))
     save(traj_future_par, file=paste0("sims_para/para_",i,".RData"))
+    
+    res3 <- restart_simulations_table_vaccinate(use_sims = use_samps,
+                                      pars=res$pars,
+                                      vaccinate_proportion=c(0.2,0.4,0.6,0.8,1),
+                                      susceptibles=res$susceptibles,
+                                      paralysis=res$paralysis,
+                                      incidence=res$incidence,
+                                      t_starts=res$tmax_vector,
+                                      tmax=365,nruns=1)
+    traj_future_vacc <- res3$res
+    traj_future_par_vacc <- res3$res_par
+    save(traj_future_vacc, file=paste0("sims_traj_vacc/traj_vacc_",i,".RData"))
+    save(traj_future_par_vacc, file=paste0("sims_para_vacc/para_vacc_",i,".RData"))
+    
+    
 }
 
 #traj_future_par %>% ggplot() + geom_line(aes(x=t,y=para,group=interaction(sim,rep)))

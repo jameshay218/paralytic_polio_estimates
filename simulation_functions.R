@@ -92,7 +92,10 @@ run_simulation <- function(R0=2,
 restart_simulation <- function(R0=2, infect_scale=0.71, infect_shape=9.8, incu_scale=0.625,
                                incu_shape=25.6,tmax=100, n_indiv=10000,
                                max_infectious_period=50,prob_paralysis=1/2000, 
-                               P=10000000, S_ini=1,inf_max=P,
+                               P=10000000, 
+                               S_ini=1,
+                               vaccinate_proportion=NULL,
+                               inf_max=P,
                                susceptible,
                                new_infections,
                                paralysis_incidence,
@@ -104,6 +107,10 @@ restart_simulation <- function(R0=2, infect_scale=0.71, infect_shape=9.8, incu_s
     paralysis_incidence <- c(paralysis_incidence, rep(0, (tmax - t_start)))
     new_infections <- c(new_infections, rep(0, (tmax - t_start)))
     susceptible <- c(susceptible, rep(0, (tmax - t_start)))
+    
+    if(!is.null(vaccinate_proportion)){
+        susceptible[t-1] <- susceptible[t-1]*(1-vaccinate_proportion)
+    }
     
     ## Solve up to the first paralysis case, and then keep solving until
     ## the paralysis incidence curve is no longer consistent with the data
@@ -353,6 +360,64 @@ restart_simulations_table <- function(use_sims,pars,susceptibles, paralysis,inci
         
     }
    
+    res_all <- do.call("bind_rows",res_all)
+    res_par_all <- do.call("bind_rows",res_par_all)
+    
+    list(res=res_all, res_par=res_par_all)
+}
+
+restart_simulations_table_vaccinate <- function(use_sims,pars,susceptibles, paralysis,incidence,
+                                      t_starts,vaccinate_proportion=c(0.2,0.4,0.6,0.8,1),
+                                      tmax,nruns=1){
+    
+    
+    match_sims <- match(use_sims,pars$sim)
+    
+    res_all <- NULL
+    res_par_all <- NULL
+    final_size_all <- NULL
+    
+    for(i in seq_along(match_sims)){
+        
+        res <- NULL
+        res_par <- NULL
+        final_size <- numeric(nruns)
+        
+        index <- match_sims[i]
+        x <- 1
+        for(k in seq_along(vaccinate_proportion)){
+            for(j in 1:nruns){
+                tmp <- restart_simulation(R0=pars$R0[index], 
+                                          tmax=tmax,
+                                          vaccinate_proportion=vaccinate_proportion[k],
+                                          infect_shape=pars$infect_shape[index],
+                                          infect_scale=pars$infect_scale[index],
+                                          prob_paralysis=pars$prob_paralysis[index],
+                                          S_ini = pars$prop_immune[index],
+                                          incu_scale=pars$incu_scale[index],
+                                          incu_shape=pars$incu_shape[index],
+                                          susceptible = susceptibles[[index]],
+                                          new_infections=incidence[[index]],
+                                          paralysis_incidence = paralysis[[index]],
+                                          t_start=t_starts[index]
+                )
+                tmp[[1]]$sim <- use_sims[i]
+                tmp[[1]]$rep <- j
+                tmp[[1]]$vacc_prop <- vaccinate_proportion[k]
+                tmp[[length(tmp)]]$sim <- use_sims[i]
+                res[[x]] <- tmp[[1]]
+                res_par[[x]] <- tmp[[length(tmp)]]
+                res_par[[x]]$sim <- use_sims[i]
+                res_par[[x]]$rep <- j
+                res_par[[x]]$vacc_prop <- vaccinate_proportion[k]
+                x <- x + 1
+            }
+        }
+        res_all[[i]] <- do.call("bind_rows",res)
+        res_par_all[[i]] <- do.call("bind_rows",res_par)
+        
+    }
+    
     res_all <- do.call("bind_rows",res_all)
     res_par_all <- do.call("bind_rows",res_par_all)
     

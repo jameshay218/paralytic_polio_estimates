@@ -24,6 +24,7 @@ res <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
 
 
 trajectories <- res$res
+paralysis_traj <- res$res_par
 pars <- res$pars
 final_sizes <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
                           final_size=res$final_size)
@@ -41,6 +42,8 @@ run_times <- trajectories %>% filter(sim %in% use_samps) %>%
     rename(tmax = t) %>%
     rename(inc_end = inc) %>%
     mutate(ongoing = inc_end>0)
+
+t_starts <- paralysis_traj %>% filter(para == 1) %>% group_by(sim) %>% filter(t == min(t)) %>% rename(tstart=t) %>% select(-para)
 
 ## Any infections in the X days prior to the end
 x <- 10
@@ -60,7 +63,9 @@ pars <- pars %>%
     mutate(Re=R0*prop_immune) %>%
     left_join(run_times) %>% 
     left_join(run_times_long) %>%
-    left_join(final_sizes)
+    left_join(final_sizes) %>%
+    left_join(t_starts) %>%
+    mutate(date_start = as.Date("2022-07-18")-tstart)
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
 if(length(use_samps) > 1){

@@ -320,7 +320,7 @@ restart_simulations_table <- function(use_sims,pars,susceptibles, paralysis,inci
         
         res <- NULL
         res_par <- NULL
-        final_size <- numeric(n)
+        final_size <- numeric(nruns)
         
         index <- match_sims[i]
         print(index)

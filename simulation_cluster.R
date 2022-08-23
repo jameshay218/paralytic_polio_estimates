@@ -8,8 +8,8 @@ source("simulation_functions.R")
 nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
-print(i)
 #i <- 1
+print(i)
 set.seed(i)
 res <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
                                incu_mean_prior_mean=16,incu_mean_prior_var=5,

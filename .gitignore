@@ -50,3 +50,11 @@ rsconnect/
 .DS_Store
 .DS_Store
 .DS_Store
+
+## Simulations
+sims/*
+sims_traj/*
+sims_para/*
+sims 2/*
+sims.zip
+sims/simulation_1.RData

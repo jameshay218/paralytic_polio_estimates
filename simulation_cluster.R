@@ -1,15 +1,17 @@
 library(dplyr)
 setwd("~/paralytic_polio_estimates")
+#setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
 source("simulation_functions.R")
 
 
-nsims <- 10000
+nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 print(i)
-
-final <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
+#i <- 1
+set.seed(i)
+res <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
                                incu_mean_prior_mean=16,incu_mean_prior_var=5,
                                incu_var_prior_mean=10,incu_var_prior_var=3,
                                infect_mean_prior_mean=7,infect_mean_prior_var=5,
@@ -21,11 +23,13 @@ final <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
                                R0_min=0,R0_max=10)
 
 
-trajectories <- final[[1]]
-pars <- final[[3]]
-final_sizes <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),final_size=final[[4]])
-paralysis_totals <- final[[7]]
-data_consistent <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),consistent=final[[8]])
+trajectories <- res$res
+pars <- res$pars
+final_sizes <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
+                          final_size=res$final_size)
+paralysis_totals <- res$n_paralysis
+data_consistent <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
+                              consistent=res$data_are_consistent)
 paralysis_totals <- paralysis_totals %>% left_join(data_consistent) %>% filter(consistent==TRUE)
 
 ## Flag which runs are consistent with the data
@@ -60,3 +64,16 @@ pars <- pars %>%
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
 
+res2 <- restart_simulations_table(use_sims = use_samps,
+                          pars=res$pars,
+                          susceptibles=res$susceptibles,
+                          paralysis=res$paralysis,
+                          incidence=res$incidence,
+                          t_starts=res$tmax_vector,
+                          tmax=500,nruns=1)
+traj_future <- res2$res
+traj_future_par <- res2$res_par
+save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))
+save(traj_future_par, file=paste0("sims_para/para_",i,".RData"))
+
+#traj_future_par %>% ggplot() + geom_line(aes(x=t,y=para,group=interaction(sim,rep)))

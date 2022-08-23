@@ -34,7 +34,7 @@ paralysis_totals <- paralysis_totals %>% left_join(data_consistent) %>% filter(c
 
 ## Flag which runs are consistent with the data
 use_samps <- paralysis_totals %>% filter(consistent == TRUE) %>% pull(sim)
-
+print(use_samps)
 ## Get outbreak length
 run_times <- trajectories %>% filter(sim %in% use_samps) %>% 
     group_by(sim) %>% filter(t == max(t)) %>%
@@ -63,17 +63,18 @@ pars <- pars %>%
     left_join(final_sizes)
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
-
-res2 <- restart_simulations_table(use_sims = use_samps,
-                          pars=res$pars,
-                          susceptibles=res$susceptibles,
-                          paralysis=res$paralysis,
-                          incidence=res$incidence,
-                          t_starts=res$tmax_vector,
-                          tmax=365,nruns=1)
-traj_future <- res2$res
-traj_future_par <- res2$res_par
-save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))
-save(traj_future_par, file=paste0("sims_para/para_",i,".RData"))
+if(length(use_samps) > 1){
+    res2 <- restart_simulations_table(use_sims = use_samps,
+                              pars=res$pars,
+                              susceptibles=res$susceptibles,
+                              paralysis=res$paralysis,
+                              incidence=res$incidence,
+                              t_starts=res$tmax_vector,
+                              tmax=365,nruns=1)
+    traj_future <- res2$res
+    traj_future_par <- res2$res_par
+    save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))
+    save(traj_future_par, file=paste0("sims_para/para_",i,".RData"))
+}
 
 #traj_future_par %>% ggplot() + geom_line(aes(x=t,y=para,group=interaction(sim,rep)))

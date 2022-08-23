@@ -1,5 +1,5 @@
 library(dplyr)
-setwd("~/Documents/GitHub/paralytic_polio_estimates")
+setwd("~/paralytic_polio_estimates")
 
 source("simulation_functions.R")
 

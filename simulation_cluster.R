@@ -4,7 +4,7 @@ setwd("~/paralytic_polio_estimates")
 source("simulation_functions.R")
 
 
-nsims <- 1000
+nsims <- 10000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 print(i)

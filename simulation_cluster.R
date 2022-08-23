@@ -70,7 +70,7 @@ res2 <- restart_simulations_table(use_sims = use_samps,
                           paralysis=res$paralysis,
                           incidence=res$incidence,
                           t_starts=res$tmax_vector,
-                          tmax=500,nruns=1)
+                          tmax=365,nruns=1)
 traj_future <- res2$res
 traj_future_par <- res2$res_par
 save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))

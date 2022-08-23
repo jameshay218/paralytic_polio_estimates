@@ -323,7 +323,7 @@ restart_simulations_table <- function(use_sims,pars,susceptibles, paralysis,inci
         final_size <- numeric(nruns)
         
         index <- match_sims[i]
-        print(index)
+
         for(j in 1:nruns){
             tmp <- restart_simulation(R0=pars$R0[index], 
                                   tmax=tmax,
@@ -338,12 +338,12 @@ restart_simulations_table <- function(use_sims,pars,susceptibles, paralysis,inci
                                   paralysis_incidence = paralysis[[index]],
                                   t_start=t_starts[index]
                                   )
-            tmp[[1]]$sim <- index
+            tmp[[1]]$sim <- use_sims[i]
             tmp[[1]]$rep <- j
-            tmp[[length(tmp)]]$sim <- index
+            tmp[[length(tmp)]]$sim <- use_sims[i]
             res[[j]] <- tmp[[1]]
             res_par[[j]] <- tmp[[length(tmp)]]
-            res_par[[j]]$sim <- index
+            res_par[[j]]$sim <- use_sims[i]
             res_par[[j]]$rep <- j
         }
         res_all[[i]] <- do.call("bind_rows",res)

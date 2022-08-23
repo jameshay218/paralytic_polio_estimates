@@ -177,6 +177,7 @@ random_simulation <- function( n=100,
                                infect_mean_prior_mean=7,infect_mean_prior_var=5,
                                infect_var_prior_mean=5,infect_var_prior_var=3,
                                R0_prior_mean=1,R0_prior_var=0.5,
+                               R0_prior_logmean=log(1),R0_prior_logvar=1,
                                prob_paralysis_mean=1/2000,prob_paralysis_var=1/2000 / 1000,
                                prop_immune_mean = 0.5,prop_immune_var=0.001,
                                R0_min=0,R0_max=10,
@@ -212,8 +213,9 @@ random_simulation <- function( n=100,
     R0_scale <- R0_prior_var/R0_prior_mean
     R0_shape <- R0_prior_mean/R0_scale
     
-    R0 <- rgamma(n, scale=R0_scale,shape=R0_shape)
-    R0 <- runif(n, R0_min, R0_max)
+    #R0 <- rgamma(n, scale=R0_scale,shape=R0_shape)
+    #R0 <- runif(n, R0_min, R0_max)
+    R0 <- rlnorm(n, R0_prior_logmean,R0_prior_logvar)
     
     para_pars <- get_beta_pars(prob_paralysis_mean, prob_paralysis_var)
     ##prob_para <- rbeta(n, para_pars[1],para_pars[2])

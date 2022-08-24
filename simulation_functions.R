@@ -1,6 +1,6 @@
 
 run_simulation <- function(R0=2, 
-                           observed_data=c(1, rep(0,30)),
+                           observed_data=c(1, rep(0,22)),
                            infect_scale=0.71, infect_shape=9.8, incu_scale=0.625,incu_shape=25.6,
                            tmax=100, ini_infs=5, n_indiv=10000,max_infectious_period=50,
                            prob_paralysis=1/2000, P=10000000, S_ini=1,
@@ -160,21 +160,7 @@ restart_simulation <- function(R0=2, infect_scale=0.71, infect_shape=9.8, incu_s
 
 
 
-rdgamma_by_mean <- function(n, mean1, var1){
-    scale <- var1/mean1
-    shape <- mean1/scale
-    extraDistr::rdgamma(n, shape=shape, scale=scale)
-}
-rgamma_by_mean <- function(n, mean1, var1){
-    scale <- var1/mean1
-    shape <- mean1/scale
-    rgamma(n, shape=shape, scale=scale)
-}
-get_beta_pars <- function(mu, var){
-    a = mu*((mu*(1-mu) / var)  -1)
-    b = a*(1-mu)/mu
-    return(c(a,b))
-}
+
 
 random_simulation <- function( n=100,  
                                tmax=100,continue_run=FALSE,
@@ -221,13 +207,13 @@ random_simulation <- function( n=100,
     R0_shape <- R0_prior_mean/R0_scale
     
     #R0 <- rgamma(n, scale=R0_scale,shape=R0_shape)
-    #R0 <- runif(n, R0_min, R0_max)
-    R0 <- rlnorm(n, R0_prior_logmean,R0_prior_logvar)
+    R0 <- runif(n, R0_min, R0_max)
+    #R0 <- rlnorm(n, R0_prior_logmean,R0_prior_logvar)
     
     para_pars <- get_beta_pars(prob_paralysis_mean, prob_paralysis_var)
     ##prob_para <- rbeta(n, para_pars[1],para_pars[2])
     
-    prob_para <- rnorm(n, prob_paralysis_mean, sqrt(prob_paralysis_var))
+    prob_para <- rnorm(n, prob_paralysis_mean, prob_paralysis_var)
     prob_para[prob_para < 0] <- 0
     prob_para[prob_para >1] <- 1
     

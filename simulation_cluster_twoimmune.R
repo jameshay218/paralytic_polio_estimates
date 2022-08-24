@@ -11,20 +11,20 @@ i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #i <- 1
 print(i)
 set.seed(i)
-res <- random_simulation(n=nsims,index_start=(i-1)*nsims + 1,
+res <- random_simulation_twoimmune(n=nsims,index_start=(i-1)*nsims + 1,
                                incu_mean_prior_mean=16,incu_mean_prior_var=5,
                                incu_var_prior_mean=10,incu_var_prior_var=3,
                                infect_mean_prior_mean=7,infect_mean_prior_var=5,
                                infect_var_prior_mean=5,infect_var_prior_var=3,
-                               tmax=180,
-                               prop_immune_mean = 0.8,prop_immune_var=0.05,
-                               prob_paralysis_var = 1/2000/10,
+                               tmax=180, P=350000,
+                               prob_paralysis_var = 1e-8,
                                ini_infs=10,
-                               R0_min=0,R0_max=10)
+                               R0_par1=0,R0_par2=10,
+                               prop_immune_pars = c(15,10,2),
+                                rel_R0_mean = 0.75)
 
 
-trajectories <- res$res
-paralysis_traj <- res$res_par
+trajectories <- res$simulation_results
 pars <- res$pars
 final_sizes <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
                           final_size=res$final_size)
@@ -36,6 +36,9 @@ paralysis_totals <- paralysis_totals %>% left_join(data_consistent) %>% filter(c
 ## Flag which runs are consistent with the data
 use_samps <- paralysis_totals %>% filter(consistent == TRUE) %>% pull(sim)
 print(use_samps)
+
+trajectories <- trajectories %>% filter(sim %in% use_samps)
+
 ## Get outbreak length
 run_times <- trajectories %>% filter(sim %in% use_samps) %>% 
     group_by(sim) %>% filter(t == max(t)) %>%
@@ -43,7 +46,7 @@ run_times <- trajectories %>% filter(sim %in% use_samps) %>%
     rename(inc_end = inc) %>%
     mutate(ongoing = inc_end>0)
 
-t_starts <- paralysis_traj %>% filter(para == 1) %>% group_by(sim) %>% filter(t == min(t)) %>% rename(tstart=t) %>% select(-para)
+t_starts <- trajectories %>% filter(para == 1) %>% group_by(sim) %>% filter(t == min(t)) %>% rename(tstart=t) %>% select(sim, tstart)
 
 ## Any infections in the X days prior to the end
 x <- 10
@@ -54,13 +57,15 @@ run_times_long <- trajectories %>% filter(sim %in% use_samps) %>%
     left_join(trajectories) %>%
     group_by(sim) %>%
     filter(t >= (tmax - x)) %>%
-    dplyr::summarize(sum_final_infs = sum(inc)) %>%
-    mutate(ongoing_10= sum_final_infs != 0)
+    dplyr::summarize(sum_final_infs = sum(inc),
+                     sum_final_para = sum(para)) %>%
+    mutate(ongoing_10= sum_final_infs != 0,
+           ongoing_10_para=sum_final_para != 0)
 
 ## Get parameters
 pars <- pars %>% 
     filter(sim %in% use_samps) %>% 
-    mutate(Re=R0*prop_immune) %>%
+    mutate(Re=R0*prop_immune_groups.1) %>%
     left_join(run_times) %>% 
     left_join(run_times_long) %>%
     left_join(final_sizes) %>%
@@ -68,32 +73,19 @@ pars <- pars %>%
     mutate(date_start = as.Date("2022-07-18")-tstart)
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
+
+## Restart simulations where they left off with/without intervention strategy
 if(length(use_samps) > 1){
-    res2 <- restart_simulations_table(use_sims = use_samps,
+    vacc_strats <- matrix(c(0,0,
+                            0.5,0.5),ncol=2,byrow=TRUE)
+    res2 <- restart_simulations_table_twoimmune(use_sims = use_samps,
                               pars=res$pars,
-                              susceptibles=res$susceptibles,
-                              paralysis=res$paralysis,
-                              incidence=res$incidence,
+                              final_conditions = res$final_conditions,
                               t_starts=res$tmax_vector,
+                              vaccinate_proportion = vacc_strats,
+                              P=350000,
                               tmax=500,nruns=1)
-    traj_future <- res2$res
-    traj_future_par <- res2$res_par
-    save(traj_future, file=paste0("sims_traj/traj_",i,".RData"))
-    save(traj_future_par, file=paste0("sims_para/para_",i,".RData"))
-    
-    res3 <- restart_simulations_table_vaccinate(use_sims = use_samps,
-                                      pars=res$pars,
-                                      vaccinate_proportion=c(0.2,0.4,0.6,0.8,1),
-                                      susceptibles=res$susceptibles,
-                                      paralysis=res$paralysis,
-                                      incidence=res$incidence,
-                                      t_starts=res$tmax_vector,
-                                      tmax=500,nruns=1)
-    traj_future_vacc <- res3$res
-    traj_future_par_vacc <- res3$res_par
-    save(traj_future_vacc, file=paste0("sims_traj_vacc/traj_vacc_",i,".RData"))
-    save(traj_future_par_vacc, file=paste0("sims_para_vacc/para_vacc_",i,".RData"))
-    
+    save(res2, file=paste0("sims_traj/traj_",i,".RData"))
     
 }
 

@@ -87,7 +87,10 @@ save(pars, file=paste0("sims/simulation_",i,".RData"))
 ## Restart simulations where they left off with/without intervention strategy
 if(length(use_samps) > 1){
     vacc_strats <- matrix(c(0,0,
-                            0.5,0.5),ncol=2,byrow=TRUE)
+                            0.2,0.2,
+                            0.4,0.4,
+                            0.6,0.6,
+                            0.8,0.8),ncol=2,byrow=TRUE)
     res2 <- restart_simulations_table_twoimmune(use_sims = use_samps,
                               pars=res$pars,
                               final_conditions = res$final_conditions,

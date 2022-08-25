@@ -4,7 +4,7 @@ library(patchwork)
 library(dplyr)
 library(paletteer)
 setwd("~/Documents/GitHub/paralytic_polio_estimates/")
-source("simulation_functions.R")
+source("simulation_functions_twoimmune.R")
 
 setwd("~/Documents/GitHub/paralytic_polio_estimates/sims/")
 all_res <-  NULL
@@ -21,92 +21,46 @@ all_traj <-  NULL
 for(i in 1:1000){
     if(file.exists(paste0("traj_",i,".RData"))){
         load(paste0("traj_",i,".RData"))
-        all_traj[[i]] <- traj_future
+        all_traj[[i]] <- res2
     }
 }
 traj <- as_tibble(do.call("bind_rows",all_traj))
 
-setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_para/")
-all_para <-  NULL
-for(i in 1:1000){
-    if(file.exists(paste0("para_",i,".RData"))){
-        load(paste0("para_",i,".RData"))
-        all_para[[i]] <- traj_future_par
-    }
-}
-para <- as_tibble(do.call("bind_rows",all_para))
-
-setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_traj_vacc//")
-all_traj_vacc <-  NULL
-for(i in 1:1000){
-    if(file.exists(paste0("traj_vacc_",i,".RData"))){
-        load(paste0("traj_vacc_",i,".RData"))
-        all_traj_vacc[[i]] <- traj_future_vacc
-    }
-}
-traj_vacc <- as_tibble(do.call("bind_rows",all_traj_vacc))
-
-setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_para_vacc/")
-all_para_vacc <-  NULL
-for(i in 1:1000){
-    if(file.exists(paste0("para_vacc_",i,".RData"))){
-        load(paste0("para_vacc_",i,".RData"))
-        all_para_vacc[[i]] <- traj_future_par_vacc
-    }
-}
-para_vacc <- as_tibble(do.call("bind_rows",all_para_vacc))
-
 traj <- traj %>% left_join(res %>% select(sim, date_start)) %>%
     mutate(t = as.Date(date_start + t)) %>%
-    drop_na() %>%
-    mutate(vacc_prop = 0)
-traj_vacc <- traj_vacc %>% left_join(res %>% select(sim, date_start)) %>%
-    mutate(t = as.Date(date_start + t)) %>%
-    drop_na()
-para <- para %>% left_join(res %>% select(sim, date_start))%>%
-    mutate(t = as.Date(date_start + t))%>%
-    drop_na()%>%
-    mutate(vacc_prop = 0)
-para_vacc <- para_vacc %>% left_join(res %>% select(sim, date_start))%>%
-    mutate(t = as.Date(date_start + t))%>%
-    drop_na()
-
-traj <- bind_rows(traj, traj_vacc)
-para <- bind_rows(para, para_vacc)
+    drop_na() 
 
 traj$vacc_prop <- as.factor(traj$vacc_prop)
-para$vacc_prop <- as.factor(para$vacc_prop)
 
-res <- res %>% filter(date_start > "2022-05-01")
+#res <- res %>% filter(date_start > "2022-05-01")
 
 samps <- sample(unique(res$sim),1000,replace=TRUE)
 samps1 <- sample(unique(res$sim),100,replace=TRUE)
-ggplot(traj %>% filter(vacc_prop == 0) %>%
+ggplot(traj %>% filter(vacc_prop == 1) %>%
            filter(t <= "2022-08-01") %>%
            filter(sim %in% samps1) %>%
            group_by(sim) %>%
            filter(t != min(t)) %>%
            left_join(res)) + 
     geom_line(aes(x=t,y=inc,group=sim,col=Re>1),size=0.25,alpha=0.5) +
-    geom_vline(xintercept=as.Date("2022-07-18")) +
-    scale_y_log10()
+    geom_vline(xintercept=as.Date("2022-07-18"))
 
 
-ggplot(para %>% filter(vacc_prop == 0) %>%
+ggplot(traj %>% filter(vacc_prop == 1) %>%
            filter(sim %in% samps)) + geom_line(aes(x=t,y=para,group=interaction(sim,rep)))
 
 traj_prop <- traj %>% mutate(y=inc>0) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
     group_by(t,vacc_prop) %>%
     mutate(prop=y/N,lower=binconf(y,N,0.05)[2], upper=binconf(y,N,0.05)[3]) 
 
-traj_para_prop <- para %>% mutate(y=para>0) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
+traj_para_prop <- traj %>% mutate(y=para>0) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
     group_by(t,vacc_prop) %>%
     mutate(prop=y/N,lower=binconf(y,N,0.05)[2], upper=binconf(y,N,0.05)[3])
 
 p1 <- traj_prop %>% ggplot() + 
     geom_ribbon(aes(x=t,ymin=lower,ymax=upper,fill=vacc_prop),alpha=0.25) +
     geom_line(aes(x=t,y=prop,col=vacc_prop),size=1) +
-    scale_y_continuous(limits=c(0,0.75),breaks=seq(0,1,by=0.1)) +
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.1)) +
     scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
                  breaks="1 month") +
     theme_classic() +
@@ -205,7 +159,7 @@ fig2 <- p1 + p2 + p3 + p4 + plot_layout(ncol=2)
 
 ## Some estimates
 ## Paralysis cases by end of outbreak
-table1 <- para %>% 
+table1 <- traj %>% 
     group_by(sim, vacc_prop) %>% 
     dplyr::summarize(y=sum(para)) %>%
     group_by(vacc_prop) %>%
@@ -214,7 +168,7 @@ table1 <- para %>%
               lower95=quantile(y,0.025), lower80=quantile(y,0.1),
               upper80=quantile(y,0.9),upper95=quantile(y,0.975))
 ## Proportion of outbreaks with more than the initial case of paralysis
-table2 <- para %>% 
+table2 <- traj %>% 
     group_by(sim, vacc_prop) %>% 
     dplyr::summarize(y=sum(para)) %>%
     ungroup() %>%
@@ -233,7 +187,7 @@ table3 <- traj %>%
                      lower95=quantile(y,0.025), lower80=quantile(y,0.1),
                      upper80=quantile(y,0.9),upper95=quantile(y,0.975))
 
-## Proportion of outbreaks with more than 100 further cases
+## Proportion of outbreaks with more than 100 further infections
 table4 <- traj %>% 
     group_by(sim, vacc_prop) %>% 
     dplyr::summarize(y=sum(inc)) %>%

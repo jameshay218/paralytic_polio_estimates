@@ -87,23 +87,23 @@ save(pars, file=paste0("sims/simulation_",i,".RData"))
 
 ## Rerun for NYC-like place
 nyc <- NULL
-for(i in 1:nrow(pars)){
-    tmp <- run_simulation_twoimmune(R0=pars$R0[i], rel_R0=pars$rel_R0[i],
+for(j in 1:nrow(pars)){
+    tmp <- run_simulation_twoimmune(R0=pars$R0[j], rel_R0=pars$rel_R0[j],
                                     P=8800000,
                              observed_data=NULL,
                              continue_run=TRUE,
                              tmax=500,
-                             latent_period=pars$latent_period[i],
-                             infect_scale=pars$infect_scale[i],infect_shape=pars$infect_shape[i],
-                             infect_ps_par=pars$infect_ps_par[i],
-                             #infect_scale_ps=infect_ps_scale[i],infect_shape_ps=infect_ps_shape[i],
-                             incu_scale=pars$incu_scale[i],incu_shape=pars$incu_shape[i],
-                             prob_paralysis_s = pars$prob_paralysis_s[i], prob_paralysis_ps = pars$prob_paralysis_ps[i],
-                             prop_immune_groups = as.numeric(pars[i,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
+                             latent_period=pars$latent_period[j],
+                             infect_scale=pars$infect_scale[j],infect_shape=pars$infect_shape[j],
+                             infect_ps_par=pars$infect_ps_par[j],
+                             #infect_scale_ps=infect_ps_scale[j],infect_shape_ps=infect_ps_shape[j],
+                             incu_scale=pars$incu_scale[j],incu_shape=pars$incu_shape[j],
+                             prob_paralysis_s = pars$prob_paralysis_s[j], prob_paralysis_ps = pars$prob_paralysis_ps[j],
+                             prop_immune_groups = as.numeric(pars[j,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
     
     dat <- tmp$dat
-    dat$sim <- pars$sim[i]
-    nyc[[i]] <- dat
+    dat$sim <- pars$sim[j]
+    nyc[[j]] <- dat
 }
 nyc <- do.call("bind_rows",nyc)
 save(nyc, file=paste0("sims_nyc/nyc_",i,".RData"))

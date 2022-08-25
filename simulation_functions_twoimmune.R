@@ -257,7 +257,6 @@ simulate_priors <- function(n=100,
                            prop_immune_fixed=FALSE,
                            prop_immune_groups=c(0,0,1), prop_immune_pars=c(5,5,5)){
     ## Incubation period
-    browser()
     if(!incu_fix){
         incu_mean_scale <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[1]
         incu_mean_shape <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[2]

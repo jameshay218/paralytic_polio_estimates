@@ -257,6 +257,7 @@ simulate_priors <- function(n=100,
                            prop_immune_fixed=FALSE,
                            prop_immune_groups=c(0,0,1), prop_immune_pars=c(5,5,5)){
     ## Incubation period
+    browser()
     if(!incu_fix){
         incu_mean_scale <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[1]
         incu_mean_shape <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[2]
@@ -304,8 +305,8 @@ simulate_priors <- function(n=100,
         #infect_ps_var <- rep(infect_ps_var_prior_mean, n)
     }
     
-    infect_scale <- find_gamma_pars(infect_var,infect_mean)[[1]]
-    infect_shape <- find_gamma_pars(infect_var,infect_mean)[[2]]
+    infect_scale <- find_gamma_pars(infect_mean,infect_var)[[1]]
+    infect_shape <- find_gamma_pars(infect_mean,infect_var)[[2]]
     
     ## If the priors are the same, assume we want identical generation intervals
     #if(infect_ps_mean_prior_mean == infect_mean_prior_mean &

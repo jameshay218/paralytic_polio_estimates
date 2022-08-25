@@ -32,9 +32,11 @@ run_simulation_twoimmune <- function(
                             ## Vector of observed paralysis data
                             observed_data=c(1, rep(0,22)),
                             ## Generation interval distribution of fully susceptible population
+                            latent_period=3,
                             infect_scale=0.71, infect_shape=9.8, 
                             ## Generation interval distribution of partially immune population
-                            infect_scale_ps=0.71, infect_shape_ps=9.8, 
+                            #infect_scale_ps=0.71, infect_shape_ps=9.8, 
+                            infect_ps_par=0.231,
                             ## Paralysis onset delay distribution
                             incu_scale=0.625,incu_shape=25.6,
                             ## Run time, seed size, population size and maximum infectiousness period
@@ -51,8 +53,10 @@ run_simulation_twoimmune <- function(
                             vaccinate_proportion=NULL
                             ){
     incubation_period <- function(n){pmax(extraDistr::rdgamma(n,scale=incu_scale,shape=incu_shape),max_incu_period)}
-    infectiousness <- function(t){extraDistr::ddgamma(t, scale=infect_scale, shape=infect_shape)}
-    infectiousness_ps <- function(t){extraDistr::ddgamma(t, scale=infect_scale_ps, shape=infect_shape_ps)}
+    infectiousness <- function(t){extraDistr::ddgamma(t-latent_period, scale=infect_scale, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,scale=infect_scale)}
+    #infectiousness_ps <- function(t){c(rep(0, latent_period), extraDistr::ddgamma(t, scale=infect_scale_ps, shape=infect_shape_ps))}
+    infectiousness_ps <- function(t){dexp(t-latent_period, infect_ps_par)}
+    
     
     ## Initial number who are fully immune, partially immune and fully susceptible
     ini_pop <- rmultinom(1, P, prop_immune_groups)[,1]
@@ -81,6 +85,7 @@ run_simulation_twoimmune <- function(
             fully_susceptible[t-1] <- fully_susceptible[t-1] - fully_s_to_partially_immune
             partially_susceptible[t-1] <- partially_susceptible[t-1] + fully_s_to_partially_immune
             partially_susceptible[t-1] <- partially_susceptible[t-1] - partially_immune_to_fully_immune
+            Rt <- final_conditions$Rt
         }
     } else {
         tmax1 <- tmax + max_incu_period
@@ -102,13 +107,16 @@ run_simulation_twoimmune <- function(
         paralysis_incidence_ps <- rep(0, tmax + max_incu_period)
         total_paralysis_cases <- 0
         t <- 2
+        
+        Rt <- rep(0, tmax1)
+        Rt[1] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
+        Rt[1] <- Rt[1] * (fully_susceptible[1]+partially_susceptible[1])/P
     }
     
     ## Check if simulated paralysis incidence is consistent with observed data
     data_are_consistent <- FALSE
     obs_dur <- length(observed_data)
     first_paralysis <- tmax
-    
     ## Solve up to the first paralysis case, and then keep solving until
     ## the paralysis incidence curve is no longer consistent with the data
     ## Or, keep solving after the observed data if the continue_run flag is TRUE
@@ -128,6 +136,7 @@ run_simulation_twoimmune <- function(
             tmp_infectiousness_s <- R0*infectiousness((t - min_t:t))
             tmp_infectiousness_ps <- rel_R0*R0*infectiousness_ps((t-min_t:t))
             
+            
             ## Number of new infections arising from previously susceptible and partially immune groups
             inc_s <- sum(sapply(seq_along(min_t:t), function(x) sum(rpois(1, use_infections_s[x]*tmp_infectiousness_s[x]))))
             inc_ps <- sum(sapply(seq_along(min_t:t), function(x) sum(rpois(1, use_infections_ps[x]*tmp_infectiousness_ps[x]))))
@@ -137,6 +146,10 @@ run_simulation_twoimmune <- function(
             inc <- inc_s + inc_ps
             inc_s <- rbinom(1,fully_susceptible[t-1],prob=(1-exp(-(inc/P))))
             inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
+            #if(inc > 25) browser()
+            Rt[t] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
+            
+            Rt[t] <- Rt[t] * (fully_susceptible[t-1]+partially_susceptible[t-1])/P
             
             ## Update susceptible pool
             fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
@@ -200,11 +213,12 @@ run_simulation_twoimmune <- function(
     inc_dat <- data.frame(t=1:(t-1), inc=new_infections_s[1:(t-1)] + new_infections_ps[1:(t-1)],
                           inc_s=new_infections_s[1:(t-1)], inc_ps = new_infections_ps[1:(t-1)],
                           para=paralysis_incidence_s[1:(t-1)]+paralysis_incidence_ps[1:(t-1)],
-                          para_s=paralysis_incidence_s[1:(t-1)], para_ps=paralysis_incidence_ps[1:(t-1)])   
+                          para_s=paralysis_incidence_s[1:(t-1)], para_ps=paralysis_incidence_ps[1:(t-1)],
+                          Rt=Rt[1:(t-1)])   
     ## Store final conditions
     final_conditions <- data.frame(incidence_s=new_infections_s[1:tmax1], incidence_ps=new_infections_ps[1:tmax1],
                                    fully_susceptible=fully_susceptible[1:tmax1], partially_susceptible=partially_susceptible[1:tmax1],
-                                   paralysis_s=paralysis_incidence_s[1:tmax1], paralysis_ps=paralysis_incidence_ps[1:tmax1])
+                                   paralysis_s=paralysis_incidence_s[1:tmax1], paralysis_ps=paralysis_incidence_ps[1:tmax1],Rt=Rt[1:tmax1])
     return(list(dat=inc_dat,
                 final_conditions=final_conditions,
                 t_end=t,
@@ -224,17 +238,19 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
                                
                                ## Generation interval parameters
                                generation_fix=FALSE,
+                               latent_period=3,
                                infect_mean_prior_mean=7,infect_mean_prior_var=5,
                                infect_var_prior_mean=5,infect_var_prior_var=3,
                                
-                               infect_ps_mean_prior_mean=infect_mean_prior_mean,infect_ps_mean_prior_var=infect_mean_prior_var,
-                               infect_ps_var_prior_mean=infect_var_prior_mean,infect_ps_var_prior_var=infect_var_prior_var,
+                               infect_ps_par1_prior_mean=0.27,infect_ps_par1_prior_var=0.1,
+                               #infect_ps_mean_prior_mean=infect_mean_prior_mean,infect_ps_mean_prior_var=infect_mean_prior_var,
+                               #infect_ps_var_prior_mean=infect_var_prior_mean,infect_ps_var_prior_var=infect_var_prior_var,
                                
                                ## R0 draws, can choose distribution
                                R0_par1=0,R0_par2=10,R0_dist="uniform",
                                
                                ## Relative R0 draws
-                               rel_R0_fixed=FALSE, rel_R0_mean=1,rel_R0_var=0.0001,
+                               rel_R0_fixed=FALSE, rel_R0_mean=1,rel_R0_var=0.001,
                                
                                ## Prob paralysis parameters
                                prob_paralysis_fixed=FALSE,
@@ -278,35 +294,38 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
         infect_var <- rgamma(n, scale=infect_var_scale, shape=infect_var_shape)
         
         ## Infectious period, partially immune
-        infect_ps_mean_scale <- find_gamma_pars(infect_ps_mean_prior_mean,infect_ps_mean_prior_var)[1]
-        infect_ps_mean_shape <- find_gamma_pars(infect_ps_mean_prior_mean,infect_ps_mean_prior_var)[2]
+        infect_ps_par <- rlnorm(n, log(infect_ps_par1_prior_mean), infect_ps_par1_prior_var)
         
-        infect_ps_var_scale <- find_gamma_pars(infect_ps_var_prior_mean,infect_ps_var_prior_var)[1]
-        infect_ps_var_shape <- find_gamma_pars(infect_ps_var_prior_mean,infect_ps_var_prior_var)[2]
+        #infect_ps_mean_scale <- find_gamma_pars(infect_ps_mean_prior_mean,infect_ps_mean_prior_var)[1]
+        #infect_ps_mean_shape <- find_gamma_pars(infect_ps_mean_prior_mean,infect_ps_mean_prior_var)[2]
         
-        infect_ps_mean <- rgamma(n, scale=infect_ps_mean_scale, shape=infect_ps_mean_shape)
-        infect_ps_var <- rgamma(n, scale=infect_ps_var_scale, shape=infect_ps_var_shape)
+        #infect_ps_var_scale <- find_gamma_pars(infect_ps_var_prior_mean,infect_ps_var_prior_var)[1]
+        #infect_ps_var_shape <- find_gamma_pars(infect_ps_var_prior_mean,infect_ps_var_prior_var)[2]
+        
+        #infect_ps_mean <- rgamma(n, scale=infect_ps_mean_scale, shape=infect_ps_mean_shape)
+        #infect_ps_var <- rgamma(n, scale=infect_ps_var_scale, shape=infect_ps_var_shape)
     } else {
         infect_mean <- rep(infect_mean_prior_mean, n)
         infect_var <- rep(infect_var_prior_mean, n)
-        infect_ps_mean <- rep(infect_ps_mean_prior_mean, n)
-        infect_ps_var <- rep(infect_ps_var_prior_mean, n)
+        infect_ps_par <- rep(infect_ps_par1_prior_mean, n)
+        #infect_ps_mean <- rep(infect_ps_mean_prior_mean, n)
+        #infect_ps_var <- rep(infect_ps_var_prior_mean, n)
     }
     
     infect_scale <- find_gamma_pars(infect_var,infect_mean)[[1]]
     infect_shape <- find_gamma_pars(infect_var,infect_mean)[[2]]
     
     ## If the priors are the same, assume we want identical generation intervals
-    if(infect_ps_mean_prior_mean == infect_mean_prior_mean &
-        infect_ps_mean_prior_var == infect_mean_prior_var &
-        infect_ps_var_prior_mean == infect_var_prior_mean &
-        infect_ps_var_prior_var == infect_var_prior_var) {
-        infect_ps_scale <- infect_scale
-        infect_ps_shape <- infect_shape
-    } else {
-        infect_ps_scale <- find_gamma_pars(infect_ps_var,infect_ps_mean)[[1]]
-        infect_ps_shape <- find_gamma_pars(infect_ps_var,infect_ps_mean)[[2]]
-    }
+    #if(infect_ps_mean_prior_mean == infect_mean_prior_mean &
+    #    infect_ps_mean_prior_var == infect_mean_prior_var &
+    #    infect_ps_var_prior_mean == infect_var_prior_mean &
+    #    infect_ps_var_prior_var == infect_var_prior_var) {
+    #    infect_ps_scale <- infect_scale
+    #    infect_ps_shape <- infect_shape
+    #} else {
+    #    infect_ps_scale <- find_gamma_pars(infect_ps_var,infect_ps_mean)[[1]]
+    #    infect_ps_shape <- find_gamma_pars(infect_ps_var,infect_ps_mean)[[2]]
+    #}
     
     ## Simulate R0s
     if(R0_dist == "gamma"){
@@ -363,8 +382,10 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
         tmp <- run_simulation_twoimmune(
             R0=R0[i], rel_R0=rel_R0s[i],P=P,
             observed_data=observed_data,
+            latent_period=latent_period,
             infect_scale=infect_scale[i],infect_shape=infect_shape[i],
-            infect_scale_ps=infect_ps_scale[i],infect_shape_ps=infect_ps_shape[i],
+            infect_ps_par=infect_ps_par[i],
+            #infect_scale_ps=infect_ps_scale[i],infect_shape_ps=infect_ps_shape[i],
             incu_scale=incu_scale[i],incu_shape=incu_shape[i],
             prob_paralysis_s = prob_para[i], prob_paralysis_ps = prob_para_ps[i],
             prop_immune_groups = prop_immune_groups[i,])
@@ -382,9 +403,10 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
         final_size[i] <- sum(dat$inc)
         n_paralysis[i] <- sum(tmp$n_paralysis)
         
-        infectious_periods[[i]] <- data.frame(sim=sim_no, t=1:max_infectious_period - 1,prob=extraDistr::ddgamma(1:max_infectious_period, shape=infect_shape[i],scale=infect_scale[i]))
+        infectious_periods[[i]] <- data.frame(sim=sim_no, t=1:max_infectious_period - 1,prob=extraDistr::ddgamma(1:max_infectious_period - latent_period, shape=infect_shape[i],scale=infect_scale[i]))
         
-        infectious_ps_periods[[i]] <- data.frame(sim=sim_no, t=1:max_infectious_period - 1,prob=extraDistr::ddgamma(1:max_infectious_period, shape=infect_ps_shape[i],scale=infect_ps_scale[i]))
+        #infectious_ps_periods[[i]] <- data.frame(sim=sim_no, t=1:max_infectious_period - 1,prob=extraDistr::ddgamma(1:max_infectious_period, shape=infect_ps_shape[i],scale=infect_ps_scale[i]))
+        infectious_ps_periods[[i]] <- data.frame(sim=sim_no, t=1:max_infectious_period - 1,prob=dexp(1:max_infectious_period - latent_period, infect_ps_par[i]))
         
         incubation_periods[[i]] <- data.frame(sim=sim_no, t=1:50 - 1, prob=extraDistr::ddgamma(1:50, shape=incu_shape[i],scale=incu_scale[i]))
         
@@ -399,9 +421,11 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
                             R0=R0,rel_R0=rel_R0s,
                             infectious_period_mean=infect_mean,infectious_period_var=infect_var,
                             infect_shape=infect_shape,infect_scale=infect_scale,
-                            infectious_period_mean_ps=infect_ps_mean,
-                            infectious_period_var_ps=infect_ps_var,
-                            infect_shape_ps=infect_ps_shape,infect_scale_ps=infect_ps_scale,
+                            infect_ps_par=infect_ps_par,
+                            #infectious_period_mean_ps=infect_ps_mean,
+                            #infectious_period_var_ps=infect_ps_var,
+                            #infect_shape_ps=infect_ps_shape,infect_scale_ps=infect_ps_scale,
+                            latent_period=latent_period,
                             incu_shape=incu_shape,incu_scale=incu_scale,
                             prob_paralysis_s = prob_para, prob_paralysis_ps = prob_para_ps,
                             prop_immune_groups = prop_immune_groups)
@@ -442,13 +466,15 @@ restart_simulations_table_twoimmune <- function(use_sims,pars,
             for(j in 1:nruns){
                 tmp <- run_simulation_twoimmune(R0 = pars$R0[index], rel_R0 = pars$rel_R0[index], 
                                                 incu_shape=pars$incu_shape[index],
+                                                latent_period=pars$latent_period[index],
                                                 infect_scale = pars$infect_scale[index], infect_shape = pars$infect_shape[index], 
-                                                infect_scale_ps = pars$infect_scale_ps[index],infect_shape_ps=pars$infect_shape_ps[index], 
+                                                #infect_scale_ps = pars$infect_scale_ps[index],infect_shape_ps=pars$infect_shape_ps[index], 
+                                                infect_ps_par=pars$infect_ps_par[index],
                                                 tmax = tmax,
                                                 P = P, 
                                                 prob_paralysis_s = pars$prob_paralysis_s[index], 
                                                 prob_paralysis_ps = pars$prob_paralysis_ps[index], 
-                                                prop_immune_groups = pars[index,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")],
+                                                prop_immune_groups = as.numeric(pars[index,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]),
                                                        
                                                 continue_run = TRUE, restart_simulation = TRUE, 
                                                 final_conditions = final_conditions[[index]], t_start = t_starts[index], vaccinate_proportion = vaccinate_proportion[k,])

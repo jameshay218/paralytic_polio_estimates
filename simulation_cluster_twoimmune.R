@@ -2,26 +2,36 @@ library(dplyr)
 setwd("~/paralytic_polio_estimates")
 #setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
-source("simulation_functions.R")
+source("simulation_functions_twoimmune.R")
 
 
-nsims <- 10000
+nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #i <- 1
 print(i)
 set.seed(i)
-res <- random_simulation_twoimmune(n=nsims,index_start=(i-1)*nsims + 1,
-                               incu_mean_prior_mean=16,incu_mean_prior_var=5,
-                               incu_var_prior_mean=10,incu_var_prior_var=3,
-                               infect_mean_prior_mean=7,infect_mean_prior_var=5,
-                               infect_var_prior_mean=5,infect_var_prior_var=3,
-                               tmax=180, P=350000,
+
+res <- random_simulation_twoimmune(n=nsims,
+                                   index_start=(i-1)*nsims + 1,
+                               incu_mean_prior_mean=16,
+                               incu_mean_prior_var=5,
+                               incu_var_prior_mean=10,
+                               incu_var_prior_var=3,
+                               infect_mean_prior_mean=1.28/0.19,
+                               infect_mean_prior_var=1,
+                               infect_var_prior_mean=1.28/(0.19*0.19),
+                               infect_var_prior_var=3,
+                               latent_period=3,
+                               tmax=180, P=325000,
+                               prob_paralysis_mean=0.0005,
+                               prob_paralysis_ps_mean = 0.01*0.0005,
                                prob_paralysis_var = 1e-8,
+                               prob_paralysis_ps_var = 1e-11,
                                ini_infs=10,
                                R0_par1=0,R0_par2=10,
-                               prop_immune_pars = c(15,10,2),
-                                rel_R0_mean = 0.75)
+                               prop_immune_pars = c(23.4,59.3,17.3),
+                               rel_R0_mean = 0.18,rel_R0_var=0.001)
 
 
 trajectories <- res$simulation_results
@@ -83,7 +93,7 @@ if(length(use_samps) > 1){
                               final_conditions = res$final_conditions,
                               t_starts=res$tmax_vector,
                               vaccinate_proportion = vacc_strats,
-                              P=350000,
+                              P=325000,
                               tmax=500,nruns=1)
     save(res2, file=paste0("sims_traj/traj_",i,".RData"))
     

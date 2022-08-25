@@ -18,4 +18,4 @@ module load R/4.0.2-fasrc01 #Load R module
 
 export R_LIBS_USER=$HOME/apps/R_4.0.2
 
-R CMD BATCH --quiet --no-restore --no-save simulation_cluster.R jobout/${SLURM_JOB_NAME}/run_${SLURM_ARRAY_TASK_ID}.Rout
+R CMD BATCH --quiet --no-restore --no-save simulation_cluster_twoimmune.R jobout/${SLURM_JOB_NAME}/run_${SLURM_ARRAY_TASK_ID}.Rout

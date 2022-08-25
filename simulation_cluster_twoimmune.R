@@ -4,13 +4,13 @@ setwd("~/paralytic_polio_estimates")
 
 source("simulation_functions_twoimmune.R")
 
-
-nsims <- 1000
+nsims <- 10000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #i <- 1
 print(i)
 set.seed(i)
+
 
 res <- random_simulation_twoimmune(n=nsims,
                                    index_start=(i-1)*nsims + 1,
@@ -29,7 +29,8 @@ res <- random_simulation_twoimmune(n=nsims,
                                prob_paralysis_var = 1e-8,
                                prob_paralysis_ps_var = 1e-11,
                                ini_infs=10,
-                               R0_par1=0,R0_par2=10,
+                               R0_dist="truncnorm",
+                               R0_par1=4.9,R0_par2=2,
                                prop_immune_pars = c(23.4,59.3,17.3),
                                rel_R0_mean = 0.18,rel_R0_var=0.001)
 
@@ -83,6 +84,30 @@ pars <- pars %>%
     mutate(date_start = as.Date("2022-07-18")-tstart)
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
+
+## Rerun for NYC-like place
+nyc <- NULL
+for(i in 1:nrow(pars)){
+    tmp <- run_simulation_twoimmune(R0=pars$R0[i], rel_R0=pars$rel_R0[i],
+                                    P=8800000,
+                             observed_data=NULL,
+                             continue_run=TRUE,
+                             tmax=500,
+                             latent_period=pars$latent_period[i],
+                             infect_scale=pars$infect_scale[i],infect_shape=pars$infect_shape[i],
+                             infect_ps_par=pars$infect_ps_par[i],
+                             #infect_scale_ps=infect_ps_scale[i],infect_shape_ps=infect_ps_shape[i],
+                             incu_scale=pars$incu_scale[i],incu_shape=pars$incu_shape[i],
+                             prob_paralysis_s = pars$prob_paralysis_s[i], prob_paralysis_ps = pars$prob_paralysis_ps[i],
+                             prop_immune_groups = as.numeric(pars[i,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
+    
+    dat <- tmp$dat
+    dat$sim <- pars$sim[i]
+    nyc[[i]] <- dat
+}
+nyc <- do.call("bind_rows",nyc)
+save(nyc, file=paste0("sims_nyc/nyc_",i,".RData"))
+
 
 ## Restart simulations where they left off with/without intervention strategy
 if(length(use_samps) > 1){

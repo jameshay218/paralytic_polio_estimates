@@ -89,20 +89,24 @@ p2 <- traj_para_prop %>%
 fig1 <- p1/p2
 
 ## Generate prior draws for density plots
-n_prior <- 100000
-immune_prop_pars <- get_beta_pars(0.8, 0.05)
-prop_immune <- rbeta(n_prior, immune_prop_pars[1],immune_prop_pars[2])
 
-prob_paralysis_mean <- 1/2000
-prob_paralysis_var <- 1/2000/10
-prob_para <- rnorm(n_prior, prob_paralysis_mean, prob_paralysis_var)
-prob_para[prob_para < 0] <- 0
-prob_para[prob_para >1] <- 1
-
-priors <- data.frame(R0 = rlnorm(n_prior,log(1),1),
-                     prop_immune=prop_immune,
-                     prob_paralysis=prob_para) %>%
-    mutate(Re = R0 * (1-prop_immune))
+priors <- simulate_priors(n=100000,
+                        incu_mean_prior_mean=16,
+                        incu_mean_prior_var=5,
+                        incu_var_prior_mean=10,
+                        incu_var_prior_var=3,
+                        infect_mean_prior_mean=1.28/0.19,
+                        infect_mean_prior_var=1,
+                        infect_var_prior_mean=1.28/(0.19*0.19),
+                        infect_var_prior_var=3,
+                        latent_period=3,
+                        prob_paralysis_mean=0.0005,
+                        prob_paralysis_ps_mean = 0.01*0.0005,
+                        prob_paralysis_var = 1e-8,
+                        prob_paralysis_ps_var = 1e-11,
+                        R0_par1=0,R0_par2=10,
+                        prop_immune_pars = c(23.4,59.3,17.3),
+                        rel_R0_mean = 0.18,rel_R0_var=0.001)
 
 p1 <- ggplot(res) +
     geom_density(data=priors,aes(x=R0,fill="Prior"),alpha=0.1) +
@@ -133,11 +137,11 @@ p2 <- ggplot(res) +
 
 p3 <- ggplot(res) + 
     geom_density(data=priors,aes(x=prob_paralysis,fill="Prior"),alpha=0.1) +
-    geom_density(aes(x=prob_paralysis,fill="Post-filter"),alpha=0.25) +
+    geom_density(aes(x=prob_paralysis_s,fill="Post-filter"),alpha=0.25) +
     theme_classic() +
     scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
     scale_y_continuous(expand=c(0,0)) +
-    scale_x_continuous(limits=c(0,0.03))+
+    scale_x_continuous(limits=c(0,0.001))+
     xlab("Infection-paralysis-ratio")+
     ylab("Density")+
     labs(tag="C")+
@@ -145,7 +149,7 @@ p3 <- ggplot(res) +
 
 p4 <- ggplot(res) + 
     geom_density(data=priors,aes(x=prop_immune,fill="Prior"),alpha=0.1) +
-    geom_density(aes(x=prop_immune,fill="Post-filter"),alpha=0.25) +
+    geom_density(aes(x=prop_immune_groups.1,fill="Post-filter"),alpha=0.25) +
     theme_classic() +
     scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
     scale_y_continuous(expand=c(0,0)) +

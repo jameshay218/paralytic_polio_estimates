@@ -30,7 +30,7 @@ run_simulation_twoimmune <- function(
                             ## R0 and relative reduction in R0 for partially immune popn
                             R0=2, rel_R0=1, 
                             ## Vector of observed paralysis data
-                            observed_data=c(1, rep(0,22)),
+                            observed_data=c(1, rep(0,48)),
                             ## Generation interval distribution of fully susceptible population
                             latent_period=3,
                             infect_scale=0.71, infect_shape=9.8, 
@@ -162,7 +162,9 @@ if(restart_simulation){
                 
                 ## Simulate paralysis cases from these new infections
                 paralysis_cases_s <- rbinom(1, inc_s, prob_paralysis_s)
-                paralysis_cases_ps <- rbinom(1, inc_ps, prob_paralysis_ps)
+                paralysis_cases_ps <- rbinom(1, inc_ps, (1.0-prob_paralysis_ps)*prob_paralysis_s)
+                #paralysis_cases_ps <- rbinom(1, inc_ps, prob_paralysis_ps)
+                #print(prob_paralysis_ps)
                 total_paralysis_cases <- total_paralysis_cases + paralysis_cases_s + paralysis_cases_ps
                 
                 new_paralysis <- paralysis_cases_s + paralysis_cases_ps
@@ -197,16 +199,28 @@ if(restart_simulation){
             
         }
         ## If we've had a paralysis case, start checking for consistency
-        if(!restart_simulation & t >= first_paralysis & total_paralysis_cases > 0 & t < (first_paralysis + obs_dur)){        
+        if(!restart_simulation & t >= first_paralysis & total_paralysis_cases > 0 & t < (first_paralysis + obs_dur)){    
             ## If this is the first time we see a paralysis case, then the data are temporarily consistent
+            #print(paste0("First paralysis: ", first_paralysis))
             t_elapsed <- t - first_paralysis
+            #print(paste0("Time elapsed: ", t_elapsed))
+            #print("Sim cases: ")
+            #print(paralysis_incidence_s[first_paralysis:t]+paralysis_incidence_ps[first_paralysis:t])
+            #print("Obs cases: ")
+            #print(observed_data[1:(1+t_elapsed)])
             data_are_consistent <- isTRUE(all.equal(paralysis_incidence_s[first_paralysis:t]+paralysis_incidence_ps[first_paralysis:t],
                                                     observed_data[1:(1+t_elapsed)]))
+
+            #if(!data_are_consistent) print("BROKEN")
         }
-        
-        ## Track how many infections we've generated
         t <- t + 1
     }
+    if(t >= tmax) data_are_consistent <- FALSE
+    #if(data_are_consistent){
+    #    print("SUCCESS")
+    #    browser()
+    #    break
+    #}
     ## Inconsistent if generated more infections then there are people
     if((sum(new_infections_s) + sum(new_infections_ps)) > P) data_are_consistent <- FALSE
     inc_dat <- data.frame(t=1:(t-1), inc=new_infections_s[1:(t-1)] + new_infections_ps[1:(t-1)],
@@ -455,6 +469,7 @@ random_simulation_twoimmune <- function( n=100,  observed_data=c(1,rep(0,22)),
     for(i in 1:n){
         if(i %% 100 == 0) print(paste0("Sim number: ", i, " of ", n))
         tmp <- run_simulation_twoimmune(
+            tmax=tmax,
             R0=pars$R0[i], rel_R0=pars$rel_R0s[i],P=P,
             observed_data=observed_data,
             latent_period=pars$latent_period[i],

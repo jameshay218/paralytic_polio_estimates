@@ -4,7 +4,7 @@ setwd("~/paralytic_polio_estimates")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 10000
+nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #i <- 1
@@ -13,6 +13,8 @@ set.seed(i)
 
 
 res <- random_simulation_twoimmune(n=nsims,
+                                   observed_data=c(1, rep(0,48)),
+                                   
                                    index_start=(i-1)*nsims + 1,
                                incu_mean_prior_mean=16,
                                incu_mean_prior_var=5,
@@ -22,16 +24,20 @@ res <- random_simulation_twoimmune(n=nsims,
                                infect_mean_prior_var=1,
                                infect_var_prior_mean=1.28/(0.19*0.19),
                                infect_var_prior_var=3,
+                               infect_ps_par1_prior_var=0.25,
                                latent_period=3,
                                tmax=180, P=325000,
                                prob_paralysis_mean=0.0005,
-                               prob_paralysis_ps_mean = 0.01*0.0005,
+                               prob_paralysis_ps_mean = 0.99,
+                               #prob_paralysis_ps_mean = 0.05*0.0005,
+                               
                                prob_paralysis_var = 1e-8,
-                               prob_paralysis_ps_var = 1e-11,
-                               ini_infs=10,
+                               prob_paralysis_ps_var = 0.0005,
+                               #prob_paralysis_ps_var = 1e-11,
+                               ini_infs=1,
                                R0_dist="truncnorm",
                                R0_par1=4.9,R0_par2=2,
-                               prop_immune_pars = c(23.4,59.3,17.3),
+                               prop_immune_pars = c(23.4,59.3,17.3)*2,
                                rel_R0_mean = 0.18,rel_R0_var=0.001)
 
 
@@ -81,7 +87,7 @@ pars <- pars %>%
     left_join(run_times_long) %>%
     left_join(final_sizes) %>%
     left_join(t_starts) %>%
-    mutate(date_start = as.Date("2022-07-18")-tstart)
+    mutate(date_start = as.Date("2022-06-22")-tstart)
 
 save(pars, file=paste0("sims/simulation_",i,".RData"))
 
@@ -90,6 +96,7 @@ nyc <- NULL
 for(j in 1:nrow(pars)){
     tmp <- run_simulation_twoimmune(R0=pars$R0[j], rel_R0=pars$rel_R0[j],
                                     P=8800000,
+                                    ini_infs=1,
                              observed_data=NULL,
                              continue_run=TRUE,
                              tmax=500,

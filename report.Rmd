@@ -1,0 +1,704 @@
+---
+title: "Estimate for the number of unobserved polio infections"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-08-22"
+---
+
+```{r setup, include=FALSE}
+library(Hmisc)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(paletteer)
+library(tidyr)
+source("simulation_functions_twoimmune.R")
+knitr::opts_chunk$set(echo=FALSE,warning=FALSE,message=FALSE)
+```
+
+```{r, echo=FALSE}
+priors <- simulate_priors(n=100000,
+                        incu_mean_prior_mean=16,
+                        incu_mean_prior_var=5,
+                        incu_var_prior_mean=10,
+                        incu_var_prior_var=3,
+                        infect_mean_prior_mean=1.28/0.19,
+                        infect_mean_prior_var=1,
+                        infect_var_prior_mean=1.28/(0.19*0.19),
+                        infect_var_prior_var=3,
+                        latent_period=3,
+                        prob_paralysis_mean=0.0005,
+                        prob_paralysis_ps_mean = 0.01*0.0005,
+                        prob_paralysis_var = 1e-8,
+                        prob_paralysis_ps_var = 1e-11,
+                        R0_par1=4.9,R0_par2=2,R0_dist="truncnorm",
+                        prop_immune_pars = c(23.4,59.3,17.3),
+                        rel_R0_mean = 0.18,rel_R0_var=0.001)
+```
+
+# Aim
+We aim to estimated the total number of unobserved polio infections from the outbreaks in New York, given that one and only one case of paralytic polio was notified on July 18, 2022 from Rockland County. Paralysis affects a small fraction of infected individuals, with lower risk among vaccinated individuals. Therefore, even a single case of paralysis suggests substantial transmission was likely. In this short report, we attempt to back-calculate estimates (with substantial uncertainty) for the number of infections that have likely occurred by the present date. 
+
+# Data
+One case of paralytic polio observed in July 18, 2022. No other cases before or after this date.
+
+# Description of population
+Vaccine coverage for polio is very high in Rockland county, both with OPV (in older individuals) and IPV (in younger individuals). Vaccine-induced immunity wanes with time since vaccination, and protection is against infection and paralysis are not the same from OPV and IPV.
+
+In brief, we classify individuals as being fully susceptible, partially immune and fully immune. Partially immune individuals are susceptible to infection, but have a reduced probability of paralysis, reduced infectivity and a different shedding profile. Fully immune individuals cannot be infected at all. The proportion of individuals in each of these classes is calculated as a function of the age distribution, vaccination coverage by vaccine type, and immune waning. Thus, we have a population split into three immune categories described by proportions $\pi_I$, $\pi_{PS}$, and $\pi_S$.
+
+# A simple simulation model
+The simplest model for transmission of polio, assuming oral-oral and fecal-oral transmission routes are combined into a single transmission term, is a branching process given through the discrete renewal equations. The number of new infections today is the sum of new infections caused by all infections in the past. This is given by the reproductive number at time \textit{t} multiplied by the infectiousness of each currently infected person, which is a function of their time-since-infection. $g$ gives the generation interval distribution -- the probability mass function for the time between infections. 
+
+\begin{equation}
+i'(t)^{S} = R_t \sum_{x<t}i(x)_{S} g(t-x)
+\end{equation}
+
+This is simple to code in R:
+
+```{r,eval=FALSE,echo=TRUE}
+tmp_infectiousness <- R0*infectiousness((t - min_t:t)-1)
+inc <- sum(sapply(seq_along(min_t:t), function(x) sum(rpois(infections[x], tmp_infectiousness[x]))))
+```
+
+where `infectiousness()` is defined as a discretized gamma distribution and `infections` is a vector giving the number of individuals infected on each day prior to time \textit{t}.
+
+We could account for differences in the generation interval distribution by making $g$ dependent on their immune state, such that partially immune individuals have a different function $f$. Further we can allow for $R_0$ to be reduced relative to the fully susceptible population by a factor $\phi$:
+
+\begin{equation}
+i'(t)^{PS} = \phi R_t \sum_{x<t}i(x)_{PS} f(t-x)
+\end{equation}
+
+and
+
+\begin{equation}
+i'(t) = i'(t)^{PS} + i'(t)^{S}
+\end{equation}
+
+An extension allows the outbreak to be seeded with some prior population immunity. This scales the number of successful new infections by the proportion of the population which is immune.
+\begin{equation}
+    i{''}(t)^{PS} = S(t-1)(1-exp(-\frac{i'(t)^{PS}}{N}))
+\end{equation}
+
+\begin{equation}
+    i{''}(t)^{S} = S(t-1)(1-exp(-\frac{i'(t)^{S}}{N}))
+\end{equation}
+
+\begin{equation}
+i''(t) = i''(t)^{PS} + i''(t)^{S}
+\end{equation}
+
+
+Again, this is straightforward to encode in R:
+
+```{r,eval=FALSE,echo=TRUE}
+inc <- susceptible[t-1]*(1-exp(-(inc/P)))
+susceptible[t] <- susceptible[t-1] - inc
+```
+
+Some proportion of infections present as cases of paralysis some time after the infections. The number of new paralysis cases observed at time $t$ is the sum of infections that occurred $x$ days in the past, multiplied by their probability of presenting as a case $t-x$ days later. This is determined both by the incubation period distributed $\gamma(t)$ and also the infection-paralysis-ratio (IPR), determined by parameter $\alpha$. Note that the IPR is conditional on the immune state ($\alpha_{PS}$ and $\alpha_{S}$).
+
+\begin{equation}
+    y(t) = \alpha_{PS} \sum_{x < t} i''_{PS}(x) \gamma_{t-x} + \alpha_{S} \sum_{x < t} i''_{S}(x) \gamma_{t-x}
+\end{equation}
+
+Again, this is simple to code in R. For each new infection, we simulate a probability of becoming paralytic with an incubation period as:
+```{r,eval=FALSE,echo=TRUE}
+paralysis_cases <- rbinom(1, inc, prob_paralysis)
+incubation_periods <- incubation_period(paralysis_cases)
+```
+
+where `incubation_period()` is defined as a discretized gamma distribution.
+
+
+# Inference using the simple simulation model
+Fitting this stochastic model to the observed data (which is a trivial dataset) gives an estimate for the total number of polio infections. An accurate estimate requires reliable estimates, or at least priors, for the generation interval distribution, incubation period distribution, the infection-paralysis-ratio, the proportion of the population in each vaccination class and their immunity, and how all of these parameters vary across immune classes.
+
+A first-pass fitting approach is to use an approximate Bayesian computation approach. We draw parameter values from prior distributions for each of these parameters, store draws which generate trajectories that are entirely consistent with the data (one case of paralysis followed by weeks of no cases), and discard trajectories which are inconsistent. The simulations are stochastic, and thus some trajectories die out with $R_e<1$, yet still generate a case of paralysis. The result gives an approximation for the posterior distribution of each parameter conditional on the observed data.
+
+# Priors
+<< To add more from Mary>>
+We derived priors for key epidemiological quantities from the literature, shown here:
+```{r,echo=FALSE,warning=FALSE}
+theme_add <- theme(axis.text=element_text(size=5),
+                   axis.title=element_text(size=6)
+                   )
+priors <- priors %>% mutate(Re = R0 * prop_immune_groups.3 + R0*rel_R0s*prop_immune_groups.2)
+p1 <- ggplot() +
+    geom_density(data=priors,aes(x=R0),alpha=0.1,fill="black") +
+    theme_classic() +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,10),breaks=seq(0,10,by=1)) +
+    xlab("Basic reproductive number in\n fully susceptible R0") +
+    ylab("Density") +
+    labs(tag="A")  +theme_add
+
+p2 <- ggplot() +
+    geom_density(data=priors,aes(x=R0*rel_R0s,fill="Prior"),alpha=0.1,fill="black") +
+    theme_classic() +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,5),breaks=seq(0,10,by=1)) +
+    xlab("Basic reproductive number in\n partially immune") +
+    ylab("Density") +
+    labs(tag="B") +
+    theme(legend.position="none")+theme_add
+    
+p3 <- ggplot() + 
+    geom_density(data=priors,aes(x=Re,fill="Prior"),alpha=0.1,fill="black") +
+    theme_classic() +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,5),breaks=seq(0,5,by=1))+
+    xlab("Effective reproductive number weighted\n by proportion partially immune")+
+    ylab("Density")+
+    labs(tag="C")+
+    theme(legend.position="none")+theme_add
+
+
+p4 <- ggplot() + 
+    geom_density(data=priors,aes(x=prop_immune_groups.1,fill="Prior"),fill="black",alpha=0.1) +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion fully immune")+
+    ylab("Density")+
+    labs(tag="D")+
+    theme(legend.position="none")+theme_add
+
+p5 <- ggplot() + 
+    geom_density(data=priors,aes(x=prop_immune_groups.2,fill="Prior"),alpha=0.1,fill="black") +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion partially immune")+
+    ylab("Density")+
+    labs(tag="E")+
+    theme(legend.position="none")+theme_add
+
+p6 <- ggplot() + 
+    geom_density(data=priors,aes(x=prop_immune_groups.3,fill="Prior"),alpha=0.1,fill="black") +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion fully susceptible")+
+    ylab("Density")+
+    labs(tag="F")+
+    theme(legend.position="none")+theme_add
+
+p7 <- ggplot() + 
+    geom_density(data=priors,aes(x=prob_paralysis_s,fill="Prior"),alpha=0.1, fill="black") +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,0.001))+
+    xlab("Infection-paralysis-ratio\n in susceptibles")+
+    ylab("Density")+
+    labs(tag="G")+
+    theme(legend.position="none")+theme_add
+
+p8 <- ggplot() + 
+    geom_density(data=priors,aes(x=prob_paralysis_ps,fill="Prior"),fill="black",alpha=0.1) +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,0.00005))+
+    xlab("Infection-paralysis-ratio\n in partially immune")+
+    ylab("Density")+
+    labs(tag="H")+
+    theme(legend.position="none")+theme_add
+
+
+(p1+theme(legend.position="none")) + p2 + p3 + p4 + p5 + p6 + p7 + p8 + ggpubr::get_legend(p1) + plot_layout(ncol=3)
+```
+
+And for the generation interval and incubation period distributions:
+
+```{r, echo=FALSE,warning=FALSE,fig.width=4}
+## Generation interval plots
+incubation_period <- function(t, incu_scale, incu_shape, max_incu_period=50){
+    extraDistr::ddgamma(t,scale=incu_scale,shape=incu_shape)/extraDistr::pdgamma(max_incu_period,scale=incu_scale,shape=incu_shape)
+}
+infectiousness <- function(t,latent_period=3,infect_scale,infect_shape,max_infectious_period=50){
+    extraDistr::ddgamma(t-latent_period, scale=infect_scale, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,scale=infect_scale)
+}
+infectiousness_ps <- function(t,latent_period=3,infect_ps_par,max_infectious_period=50){
+    dexp(t-latent_period, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)
+}
+
+
+
+ts <- 0:25
+tmp_samp <- sample(1:nrow(priors),100)
+res1 <- priors[tmp_samp,]
+incu_periods_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+for(x in 1:nrow(res1)){
+    incu_periods_dat[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
+    infectiousness_dat[x,] <- infectiousness(ts, res1$latent_period[x], infect_scale=res1$infect_scale[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_dat[x,] <- incubation_period(ts, res1$latent_period[x], res1$infect_ps_par[x])
+}
+incu_periods_dat <- reshape2::melt(incu_periods_dat)
+colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")
+incu_periods_dat$model <- "Paralysis incubation period"
+infectiousness_dat <- reshape2::melt(infectiousness_dat)
+colnames(infectiousness_dat) <- c("sim","time_since_infection","probability")
+infectiousness_dat$model <- "Susceptible generation interval"
+
+infectiousness_ps_dat <- reshape2::melt(infectiousness_ps_dat)
+colnames(infectiousness_ps_dat) <- c("sim","time_since_infection","probability")
+infectiousness_ps_dat$model <- "Partially immune generation interval"
+dists <- bind_rows(incu_periods_dat,infectiousness_dat,infectiousness_ps_dat)
+dists_summary <- dists %>% group_by(model, time_since_infection)
+ggplot(dists) + geom_line(aes(x=time_since_infection,y=probability,group=sim),alpha=0.1) +
+    facet_wrap(~model,scales="free_y",ncol=1) +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    xlab("Days since infection") +
+    ylab("Probability density") + theme_add
+```
+
+# Post fitting
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+
+setwd("~/Documents/GitHub/paralytic_polio_estimates/sims/")
+all_res <-  NULL
+for(i in 1:1000){
+    if(file.exists(paste0("simulation_",i,".RData"))){
+        load(paste0("simulation_",i,".RData"))
+        all_res[[i]] <- pars
+    }
+}
+res <- as_tibble(do.call("bind_rows",all_res))
+res <- res %>% select(-c(Rt, inc_s,inc_ps,para,para_s,para_ps))
+
+setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_traj/")
+all_traj <-  NULL
+for(i in 1:1000){
+    if(file.exists(paste0("traj_",i,".RData"))){
+        load(paste0("traj_",i,".RData"))
+        all_traj[[i]] <- res2
+    }
+}
+traj <- as_tibble(do.call("bind_rows",all_traj))
+
+setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_nyc/")
+all_nyc <-  NULL
+for(i in 1:1000){
+    if(file.exists(paste0("nyc_",i,".RData"))){
+        load(paste0("nyc_",i,".RData"))
+        all_nyc[[i]] <- nyc
+    }
+}
+traj_nyc <- as_tibble(do.call("bind_rows",all_nyc))
+
+traj <- traj %>% left_join(res %>% select(sim, date_start)) %>%
+    mutate(t = as.Date(date_start + t)) %>%
+    drop_na() 
+
+traj_nyc <- traj_nyc %>% left_join(res %>% select(sim, date_start)) %>%
+    mutate(t = as.Date(date_start + t)) %>%
+    drop_na() 
+
+traj$vacc_prop <- as.factor(traj$vacc_prop)
+
+#res <- res %>% filter(date_start > "2022-05-01")
+
+samps <- sample(unique(res$sim),1000,replace=TRUE)
+samps1 <- sample(unique(res$sim),100,replace=TRUE)
+
+
+traj_prop <- traj %>% mutate(y=inc>10) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
+    group_by(t,vacc_prop) %>%
+    mutate(prop=y/N,lower=binconf(y,N,0.05)[2], upper=binconf(y,N,0.05)[3]) 
+
+traj_prop_Rt <- traj %>% mutate(y=Rt>1) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
+    group_by(t,vacc_prop) %>%
+    mutate(prop=y/N,lower=binconf(y,N,0.05)[2], upper=binconf(y,N,0.05)[3]) 
+
+traj_para_prop <- traj %>% mutate(y=para>0) %>% group_by(t,vacc_prop) %>% dplyr::summarize(y=sum(y),N=n()) %>% 
+    group_by(t,vacc_prop) %>%
+    mutate(prop=y/N,lower=binconf(y,N,0.05)[2], upper=binconf(y,N,0.05)[3])
+
+res <- res %>% mutate(Re = R0 * prop_immune_groups.3 + R0*rel_R0*prop_immune_groups.2)
+
+```
+
+We find that only trajectories with a very high $R_0$ are consistent with the data, as the high level of population immunity renders the effective reproductive number very low.
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE}
+theme_add <- theme(axis.text=element_text(size=5),
+                   axis.title=element_text(size=6)
+                   )
+p1 <- ggplot(res) +
+    geom_density(data=priors,aes(x=R0,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=R0,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_fill_manual(name="",
+                       values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,10),breaks=seq(0,10,by=1)) +
+    xlab("Basic reproductive number\n in fully susceptible R0") +
+    ylab("Density") +
+    labs(tag="A") +theme_add
+
+p2 <- ggplot(res) +
+    geom_density(data=priors,aes(x=R0*rel_R0s,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=R0*rel_R0,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_fill_manual(name="",
+                      values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,5),breaks=seq(0,10,by=1)) +
+    xlab("Basic reproductive number\n in partially immune") +
+    ylab("Density") +
+    labs(tag="B") +
+    theme(legend.position="none")+theme_add
+    
+p3 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=Re,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=Re,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    geom_vline(xintercept=1,col="red",linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,5),breaks=seq(0,5,by=1))+
+    xlab("Effective reproductive number weighted\n by proportion partially immune")+
+    ylab("Density")+
+    labs(tag="C")+
+    theme(legend.position="none")+theme_add
+
+
+p4 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prop_immune_groups.1,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prop_immune_groups.1,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion fully immune")+
+    ylab("Density")+
+    labs(tag="D")+
+    theme(legend.position="none")+theme_add
+
+p5 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prop_immune_groups.2,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prop_immune_groups.2,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion partially immune")+
+    ylab("Density")+
+    labs(tag="E")+
+    theme(legend.position="none")+theme_add
+
+p6 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prop_immune_groups.3,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prop_immune_groups.3,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,1)) +
+    xlab("Proportion fully susceptible")+
+    ylab("Density")+
+    labs(tag="F")+
+    theme(legend.position="none")+theme_add
+
+p7 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prob_paralysis_s,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prob_paralysis_s,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,0.001))+
+    xlab("Infection-paralysis-ratio\n in susceptibles")+
+    ylab("Density")+
+    labs(tag="G")+
+    theme(legend.position="none")+theme_add
+
+p8 <- ggplot(res) + 
+    geom_density(data=priors,aes(x=prob_paralysis_ps,fill="Prior"),alpha=0.1) +
+    geom_density(aes(x=prob_paralysis_ps,fill="Post-filter"),alpha=0.25) +
+    theme_classic() +
+    scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(limits=c(0,0.00005))+
+    xlab("Infection-paralysis-ratio\n in partially immune")+
+    ylab("Density")+
+    labs(tag="H")+
+    theme(legend.position="none")+theme_add
+
+
+fig2 <- (p1+theme(legend.position="none")) + p2 + p3 + p4 + p5 + p6 + p7 + p8 + ggpubr::get_legend(p1) + plot_layout(ncol=3)
+fig2
+```
+
+
+```{r,echo=FALSE,warning=FALSE,message=FALSE,fig.width=4}
+ts <- 0:25
+res1 <- res %>% filter(sim %in% samps)
+incu_periods_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+for(x in 1:nrow(res1)){
+    incu_periods_dat[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
+    infectiousness_dat[x,] <- infectiousness(ts, res1$latent_period[x], infect_scale=res1$infect_scale[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_dat[x,] <- incubation_period(ts, res1$latent_period[x], res1$infect_ps_par[x])
+}
+incu_periods_dat <- reshape2::melt(incu_periods_dat)
+colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")
+incu_periods_dat$model <- "Paralysis incubation period"
+infectiousness_dat <- reshape2::melt(infectiousness_dat)
+colnames(infectiousness_dat) <- c("sim","time_since_infection","probability")
+infectiousness_dat$model <- "Susceptible generation interval"
+
+infectiousness_ps_dat <- reshape2::melt(infectiousness_ps_dat)
+colnames(infectiousness_ps_dat) <- c("sim","time_since_infection","probability")
+infectiousness_ps_dat$model <- "Partially immune generation interval"
+dists <- bind_rows(incu_periods_dat,infectiousness_dat,infectiousness_ps_dat)
+dists_summary <- dists %>% group_by(model, time_since_infection)
+ggplot(dists) + geom_line(col="blue",aes(x=time_since_infection,y=probability,group=sim),alpha=0.1) +
+    facet_wrap(~model,scales="free_y",ncol=1) +
+    theme_classic() +
+    scale_y_continuous(expand=c(0,0)) +
+    xlab("Days since infection") +
+    ylab("Probability density") + theme_add
+```
+
+A subset of possible trajectories demonstrates just how variable the trajectory could have been to have generated one case of paralysis.
+
+```{r}
+p1 <- ggplot(traj %>% filter(vacc_prop == 1) %>%
+           filter(t <= "2022-07-01") %>%
+           filter(sim %in% samps1) %>%
+           group_by(sim) %>%
+           filter(t != min(t)) %>%
+           left_join(res %>% filter(sim %in% samps1))%>% 
+               group_by(sim) %>% mutate(cumu_inc=cumsum(inc))) + 
+    geom_line(aes(x=t,y=cumu_inc,group=sim,col=Re>1),size=0.25,alpha=0.5) +
+    geom_vline(xintercept=as.Date("2022-07-18")) +
+    theme_classic() +
+    ylab("Cumulative incidence\n of polio infections")+
+    xlab("Date") +
+    scale_color_manual(name="Re>1",values=c("TRUE"="black","FALSE"="blue"))
+p2 <- ggplot(traj %>% filter(vacc_prop == 1) %>%
+           filter(t <= "2022-09-01") %>%
+           filter(sim %in% samps1) %>%
+           group_by(sim) %>%
+           filter(t != min(t)) %>%
+           left_join(res %>%  filter(sim %in% samps1))%>% 
+               group_by(sim) %>% mutate(cumu_inc=cumsum(inc))) + 
+    geom_line(aes(x=t,y=cumu_inc,group=sim,col=Re>1),size=0.25,alpha=0.5) +
+    geom_vline(xintercept=as.Date("2022-07-18")) +
+    theme_classic() +
+    ylab("Cumulative incidence\n of polio infections")+
+    xlab("Date") +
+    scale_color_manual(name="Re>1",values=c("TRUE"="black","FALSE"="blue"))
+p1/p2
+
+```
+
+An easier visualization is to inspect the proportion of runs consistent with the data which are still generating new cases over time.
+
+```{r}
+p1 <- traj_prop %>% filter(vacc_prop == 1) %>%
+    ggplot() + 
+    geom_ribbon(aes(x=t,ymin=lower,ymax=upper),alpha=0.25) +
+    geom_line(aes(x=t,y=prop),size=1) +
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.1)) +
+    scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
+                 breaks="1 month") +
+    theme_classic() +
+    ylab("Proportion of simulations with\n >10 new infections per day") +
+    theme(axis.text.x=element_blank(),axis.title.x=element_blank(),axis.ticks.x=element_blank(),
+          axis.line.x=element_blank(),
+          panel.grid.major=element_line(size=0.25,color="grey70"),
+          legend.position="top") +
+    labs(tag="A",fill="Prop vaccinated",color="Prop vaccinated") +
+    scale_color_viridis_d() + scale_fill_viridis_d()+
+    theme(axis.text=element_text(size=6),axis.title=element_text(size=8))
+p2 <- traj_para_prop %>% filter(vacc_prop == 1) %>%
+    ggplot() + 
+    geom_ribbon(aes(x=t,ymin=lower,ymax=upper),alpha=0.25) +
+    geom_line(aes(x=t,y=prop),size=1) +
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.2))+
+    scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
+                 breaks="1 month")+
+    theme_classic()+
+    ylab("Proportion of simulations with\n >1 paralysis case per day") +
+    xlab("Date") + 
+    theme(panel.grid.major=element_line(size=0.25,color="grey70"),
+          axis.text.x=element_text(angle=45,hjust=1),legend.position="none")+
+    labs(tag="B",fill="Prop vaccinated",color="Prop vaccinated") +
+    scale_color_viridis_d() + scale_fill_viridis_d() +
+    theme(axis.text=element_text(size=6),axis.title=element_text(size=8))
+
+p1/p2
+
+```
+
+And Rt.
+
+```{r,fig.height=4,fig.width=7}
+traj_prop_Rt %>% filter(vacc_prop == 1) %>%
+    ggplot() + 
+    geom_ribbon(aes(x=t,ymin=lower,ymax=upper),alpha=0.25) +
+    geom_line(aes(x=t,y=prop),size=1) +
+    scale_y_continuous(limits=c(0,1),breaks=seq(0,1,by=0.1)) +
+    scale_x_date(limits=as.Date(c("2022-08-22","2023-07-01")),
+                 breaks="1 month") +
+    theme_classic() +
+    ylab("Proportion of simulations with Rt>1") +
+    theme(panel.grid.major=element_line(size=0.25,color="grey70"),
+          axis.text.x=element_text(angle=45,hjust=1),legend.position="none")+
+    labs(tag="B",fill="Prop vaccinated",color="Prop vaccinated") +
+    scale_color_viridis_d() + scale_fill_viridis_d()
+```
+
+The proportion of trajectories with $R_t > 1$ by 2022-08-20:
+
+```{r}
+y <- traj %>% 
+    ungroup() %>%
+    filter(t == "2022-08-20", vacc_prop==1) %>% 
+    mutate(y=Rt>1) %>%
+    pull(y)
+print(sum(y)/nrow(res))
+```
+
+And with incidence >0 by 2022-08-20:
+```{r}
+y <- traj %>% 
+    ungroup() %>%
+    filter(t == "2022-08-20", vacc_prop==1) %>% 
+    mutate(y=inc>1) %>%
+    pull(y)
+print(sum(y)/nrow(res))
+```
+
+```{r}
+## Some estimates
+## Total aralysis cases by end of outbreak
+table1 <- traj %>% 
+    group_by(sim, vacc_prop) %>% 
+    dplyr::summarize(y=sum(para)) %>%
+    group_by(vacc_prop) %>%
+    dplyr::summarize(mean_para=mean(y),
+              median_para=median(y),
+              lower95=quantile(y,0.025), lower80=quantile(y,0.1),
+              upper80=quantile(y,0.9),upper95=quantile(y,0.975))
+
+## Proportion of outbreaks with more than the initial case of paralysis
+table2 <- traj %>% 
+    group_by(sim, vacc_prop) %>% 
+    dplyr::summarize(y=sum(para)) %>%
+    ungroup() %>%
+    mutate(x=y>1) %>%
+    group_by(vacc_prop) %>%
+    dplyr::summarize(y=sum(x)/n())
+
+
+## Number of infections by end of simulation
+table3 <- traj %>% 
+    group_by(sim, vacc_prop) %>% 
+    dplyr::summarize(y=sum(inc)) %>%
+    group_by(vacc_prop) %>%
+    dplyr::summarize(mean_inf=mean(y),
+                     median_inf=median(y),
+                     lower95=quantile(y,0.025), lower80=quantile(y,0.1),
+                     upper80=quantile(y,0.9),upper95=quantile(y,0.975))
+
+
+
+## Proportion of outbreaks with more than 100 further infections
+table4 <- traj %>% 
+    group_by(sim, vacc_prop) %>% 
+    dplyr::summarize(y=sum(inc)) %>%
+    ungroup() %>%
+    mutate(x=y>100) %>%
+    group_by(vacc_prop) %>%
+    dplyr::summarize(y=sum(x)/n())
+
+## Number of infections by 2022-08-20
+table5 <- traj %>% 
+    filter(t <= "2022-08-20") %>%
+    group_by(sim, vacc_prop) %>% 
+    dplyr::summarize(y=sum(inc)) %>%
+    group_by(vacc_prop) %>%
+    dplyr::summarize(mean_inf=mean(y),
+                     median_inf=median(y),
+                     lower95=quantile(y,0.025), lower80=quantile(y,0.1),
+                     upper80=quantile(y,0.9),upper95=quantile(y,0.975))
+
+```
+
+Number of infections by 2022-08-20.
+```{r}
+colnames(table5) <- c("Vaccine strategy","Mean infections",
+                      "Median infections","Lower 95% PrI","Lower 80% PrI","Upper 80% PrI","Upper 95% PrI")
+knitr::kable(table5[1,2:ncol(table5)],digits=1)
+```
+
+Number of paralysis cases by the end of the simulation (ie. once the epidemic has burned through the susceptible population).
+```{r}
+colnames(table1) <- c("Vaccine strategy","Mean paralysis cases",
+                      "Median paralysis cases","Lower 95% PrI","Lower 80% PrI","Upper 80% PrI","Upper 95% PrI")
+knitr::kable(table1[1,2:ncol(table1)],digits=1)
+```
+
+Proportion of simulations with more than one case of paralysis after the initial case.
+```{r}
+colnames(table2) <- c("Vaccine strategy","Proportion")
+knitr::kable(table2[1,],digits=3)
+```
+
+Number of infections by the end of the simulation (ie. once the epidemic has burned through the susceptible population).
+```{r}
+colnames(table3) <- c("Vaccine strategy","Mean infections",
+                      "Median infections","Lower 95% PrI","Lower 80% PrI","Upper 80% PrI","Upper 95% PrI")
+knitr::kable(table3[1,2:ncol(table3)],digits=1)
+```
+
+Proportion of simulations with more than 100 further infections.
+```{r}
+colnames(table4) <- c("Vaccine strategy","Proportion")
+knitr::kable(table4[1,],digits=3)
+```
+
+# Dynamics in New York City
+To provide a comparator scenario where the polio epidemic continues to grow and is seeded with sustained transmission in nearby counties (as is suggested by wastewater data), we ran the simulation using the same posterior draws, but for the population size and immune class distribution of New York City.
+
+```{r}
+p1 <- ggplot(traj_nyc %>% 
+           filter(t <= "2022-12-01") %>%
+           filter(sim %in% samps1) %>%
+           group_by(sim) %>%
+           filter(t != min(t)) %>%
+           left_join(res %>%  filter(sim %in% samps1))%>% 
+               group_by(sim) %>% mutate(cumu_inc=cumsum(inc))) + 
+    geom_line(aes(x=t,y=cumu_inc,group=sim,col=Re>1),size=0.25,alpha=0.5) +
+    geom_vline(xintercept=as.Date("2022-07-18")) +
+    theme_classic() +
+    ylab("Cumulative incidence\n of polio infections")+
+    xlab("Date") +
+    scale_color_manual(name="Re>1",values=c("TRUE"="black","FALSE"="blue"))
+p2 <- ggplot(traj_nyc %>% 
+           filter(t <= "2022-12-01") %>%
+           filter(sim %in% samps1) %>%
+           group_by(sim) %>%
+           filter(t != min(t)) %>%
+           left_join(res %>%  filter(sim %in% samps1))%>% 
+               group_by(sim) %>% mutate(cumu_inc=cumsum(para))) + 
+    geom_line(aes(x=t,y=cumu_inc,group=sim,col=Re>1),size=0.25,alpha=0.5) +
+    geom_vline(xintercept=as.Date("2022-07-18")) +
+    theme_classic() +
+    ylab("Cumulative incidence\n of paralytic polio")+
+    xlab("Date") +
+    scale_color_manual(name="Re>1",values=c("TRUE"="black","FALSE"="blue"))
+p1/p2
+
+```

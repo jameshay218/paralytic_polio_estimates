@@ -131,7 +131,7 @@ priors <- simulate_priors(n=100000,
                         prob_paralysis_ps_mean = 0.01*0.0005,
                         prob_paralysis_var = 1e-8,
                         prob_paralysis_ps_var = 1e-11,
-                        R0_par1=0,R0_par2=10,
+                        R0_par1=4.9,R0_par2=2,R0_dist="truncnorm",
                         prop_immune_pars = c(23.4,59.3,17.3),
                         rel_R0_mean = 0.18,rel_R0_var=0.001)
 
@@ -241,7 +241,7 @@ p8 <- ggplot(res) +
 
 fig2 <- (p1+theme(legend.position="none")) + p2 + p3 + p4 + p5 + p6 + p7 + p8 + ggpubr::get_legend(p1) + plot_layout(ncol=3)
 
-## Proportion with Rt<1 by 2022-08-20
+## Proportion with Rt>1 by 2022-08-20
 y <- traj %>% 
     ungroup() %>%
     filter(t == "2022-08-20", vacc_prop==1) %>% 
@@ -253,7 +253,7 @@ sum(y)/nrow(res)
 y <- traj %>% 
     ungroup() %>%
     filter(t == "2022-08-20", vacc_prop==1) %>% 
-    mutate(y=inc>1) %>%
+    mutate(y=inc>0) %>%
     pull(y)
 sum(y)/nrow(res)
 
@@ -314,15 +314,15 @@ infectiousness <- function(t,latent_period=3,infect_scale,infect_shape,max_infec
 #infectiousness_ps <- function(t){c(rep(0, latent_period), extraDistr::ddgamma(t, scale=infect_scale_ps, shape=infect_shape_ps))}
 infectiousness_ps <- function(t, latent_period=3,infect_ps_par,max_infectious_period=50){dexp(t-latent_period, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)}
 
-ts <- 0:50
+ts <- 0:25
 res1 <- res %>% filter(sim %in% samps)
 incu_periods_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 for(x in 1:nrow(res1)){
-    incu_periods_dat[x,] <- incubation_period(ts, res$incu_scale[x],res$incu_shape[x])
-    infectiousness_dat[x,] <- infectiousness(ts, res$latent_period[x], infect_scale=res$infect_scale[x],infect_shape=res$infect_shape[x])
-    infectiousness_ps_dat[x,] <- incubation_period(ts, res$latent_period[x], res$infect_ps_par[x])
+    incu_periods_dat[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
+    infectiousness_dat[x,] <- infectiousness(ts, res1$latent_period[x], infect_scale=res1$infect_scale[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_dat[x,] <- incubation_period(ts, res1$latent_period[x], res1$infect_ps_par[x])
 }
 incu_periods_dat <- reshape2::melt(incu_periods_dat)
 colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")

@@ -20,21 +20,31 @@ knitr::opts_chunk$set(echo=FALSE,warning=FALSE,message=FALSE)
 ```{r, echo=FALSE}
 priors <- simulate_priors(n=100000,
                         incu_mean_prior_mean=16,
-                        incu_mean_prior_var=5,
-                        incu_var_prior_mean=10,
-                        incu_var_prior_var=3,
-                        infect_mean_prior_mean=1.28/0.19,
-                        infect_mean_prior_var=1,
-                        infect_var_prior_mean=1.28/(0.19*0.19),
-                        infect_var_prior_var=3,
-                        latent_period=3,
-                        prob_paralysis_mean=0.0005,
-                        prob_paralysis_ps_mean = 0.01*0.0005,
-                        prob_paralysis_var = 1e-8,
-                        prob_paralysis_ps_var = 1e-11,
-                        R0_par1=4.9,R0_par2=2,R0_dist="truncnorm",
-                        prop_immune_pars = c(23.4,59.3,17.3),
-                        rel_R0_mean = 0.18,rel_R0_var=0.001)
+                               incu_mean_prior_var=5,
+                               incu_var_prior_mean=10,
+                               incu_var_prior_var=3,
+                               gen_interval_susc_shape_par1=3.87,
+                               gen_interval_susc_shape_par2=0.52,
+                               gen_interval_susc_rate_par1=23.86,
+                               gen_interval_susc_rate_par2=52.71,
+                               
+                               gen_interval_partial_shape_par1=2.60,
+                               gen_interval_partial_shape_par2=0.61,
+                               gen_interval_partial_rate_par1=6.82,
+                               gen_interval_partial_rate_par2=19.00,
+                               
+                               prob_paralysis_mean=0.0005,
+                               prob_paralysis_ps_par1 = -4,
+                               prob_paralysis_ps_par2 = -1,
+                               prob_paralysis_var = 2e-8,
+                               R0_dist="truncnorm",
+                               R0_par1=4.9,R0_par2=2,
+                               rel_R0_par1=7.04,
+                               rel_R0_par2=65.16,
+                               prop_susceptible_par1 = 39.34,
+                               prop_susceptible_par2 = 144.52,
+                               prop_refractory_par1 = 4.66,
+                               prop_refractory_par2 = 31.64)
 ```
 
 # Aim
@@ -199,11 +209,11 @@ p7 <- ggplot() +
     theme(legend.position="none")+theme_add
 
 p8 <- ggplot() + 
-    geom_density(data=priors,aes(x=prob_paralysis_ps,fill="Prior"),fill="black",alpha=0.1) +
+    geom_density(data=priors,aes(x=1-prob_paralysis_ps,fill="Prior"),fill="black",alpha=0.1) +
     theme_classic() +
     scale_y_continuous(expand=c(0,0)) +
-    scale_x_continuous(limits=c(0,0.00005))+
-    xlab("Infection-paralysis-ratio\n in partially immune")+
+    #scale_x_continuous(limits=c(0,1))+
+    xlab("Relative infection-paralysis-ratio\n in partially immune")+
     ylab("Density")+
     labs(tag="H")+
     theme(legend.position="none")+theme_add
@@ -219,11 +229,8 @@ And for the generation interval and incubation period distributions:
 incubation_period <- function(t, incu_scale, incu_shape, max_incu_period=50){
     extraDistr::ddgamma(t,scale=incu_scale,shape=incu_shape)/extraDistr::pdgamma(max_incu_period,scale=incu_scale,shape=incu_shape)
 }
-infectiousness <- function(t,latent_period=3,infect_scale,infect_shape,max_infectious_period=50){
-    extraDistr::ddgamma(t-latent_period, scale=infect_scale, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,scale=infect_scale)
-}
-infectiousness_ps <- function(t,latent_period=3,infect_ps_par,max_infectious_period=50){
-    dexp(t-latent_period, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)
+infectiousness <- function(t,infect_rate,infect_shape,max_infectious_period=50){
+    extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,scale=infect_scale)
 }
 
 
@@ -236,8 +243,8 @@ infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 for(x in 1:nrow(res1)){
     incu_periods_dat[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
-    infectiousness_dat[x,] <- infectiousness(ts, res1$latent_period[x], infect_scale=res1$infect_scale[x],infect_shape=res1$infect_shape[x])
-    infectiousness_ps_dat[x,] <- incubation_period(ts, res1$latent_period[x], res1$infect_ps_par[x])
+    infectiousness_dat[x,] <- infectiousness(ts, infect_rate=res1$infect_rate[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_dat[x,] <- infectiousness(ts, infect_rate=res1$infect_partial_rate[x],infect_shape=res1$infect_partial_shape[x])
 }
 incu_periods_dat <- reshape2::melt(incu_periods_dat)
 colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")
@@ -421,13 +428,13 @@ p7 <- ggplot(res) +
     theme(legend.position="none")+theme_add
 
 p8 <- ggplot(res) + 
-    geom_density(data=priors,aes(x=prob_paralysis_ps,fill="Prior"),alpha=0.1) +
+    geom_density(data=priors,aes(x=1-prob_paralysis_ps,fill="Prior"),alpha=0.1) +
     geom_density(aes(x=prob_paralysis_ps,fill="Post-filter"),alpha=0.25) +
     theme_classic() +
     scale_fill_manual(name="",values=c("Prior"="black","Post-filter"="blue")) +
     scale_y_continuous(expand=c(0,0)) +
-    scale_x_continuous(limits=c(0,0.00005))+
-    xlab("Infection-paralysis-ratio\n in partially immune")+
+    #scale_x_continuous(limits=c(0,0.00005))+
+    xlab("Relative infection-paralysis-ratio\n in partially immune")+
     ylab("Density")+
     labs(tag="H")+
     theme(legend.position="none")+theme_add
@@ -446,8 +453,8 @@ infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
 for(x in 1:nrow(res1)){
     incu_periods_dat[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
-    infectiousness_dat[x,] <- infectiousness(ts, res1$latent_period[x], infect_scale=res1$infect_scale[x],infect_shape=res1$infect_shape[x])
-    infectiousness_ps_dat[x,] <- incubation_period(ts, res1$latent_period[x], res1$infect_ps_par[x])
+    infectiousness_dat[x,] <- infectiousness(ts, infect_rate=res1$infect_rate[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_dat[x,] <- infectiousness(ts, infect_rate=res1$infect_partial_rate[x],infect_shape=res1$infect_partial_shape[x])
 }
 incu_periods_dat <- reshape2::melt(incu_periods_dat)
 colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")

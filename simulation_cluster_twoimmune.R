@@ -11,34 +11,40 @@ i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 print(i)
 set.seed(i)
 
-
 res <- random_simulation_twoimmune(n=nsims,
                                    observed_data=c(1, rep(0,48)),
                                    
                                    index_start=(i-1)*nsims + 1,
-                               incu_mean_prior_mean=16,
-                               incu_mean_prior_var=5,
-                               incu_var_prior_mean=10,
-                               incu_var_prior_var=3,
-                               infect_mean_prior_mean=1.28/0.19,
-                               infect_mean_prior_var=1,
-                               infect_var_prior_mean=1.28/(0.19*0.19),
-                               infect_var_prior_var=3,
-                               infect_ps_par1_prior_var=0.25,
-                               latent_period=3,
+                               incu_mean_prior_mean=14,
+                               incu_mean_prior_var=3,
+                               incu_var_prior_mean=15,
+                               incu_var_prior_var=1,
+                               gen_interval_susc_shape_par1=3.87,
+                               gen_interval_susc_shape_par2=0.52,
+                               gen_interval_susc_rate_par1=23.86,
+                               gen_interval_susc_rate_par2=52.71,
+                               
+                               gen_interval_partial_shape_par1=2.60,
+                               gen_interval_partial_shape_par2=0.61,
+                               gen_interval_partial_rate_par1=6.82,
+                               gen_interval_partial_rate_par2=19.00,
+                               
                                tmax=180, P=325000,
                                prob_paralysis_mean=0.0005,
-                               prob_paralysis_ps_mean = 0.99,
-                               #prob_paralysis_ps_mean = 0.05*0.0005,
-                               
-                               prob_paralysis_var = 1e-8,
-                               prob_paralysis_ps_var = 0.0005,
+                               prob_paralysis_ps_par1 = -4,
+                               prob_paralysis_ps_par2 = -1,
+                               prob_paralysis_var = 2e-8,
                                #prob_paralysis_ps_var = 1e-11,
                                ini_infs=1,
                                R0_dist="truncnorm",
                                R0_par1=4.9,R0_par2=2,
-                               prop_immune_pars = c(23.4,59.3,17.3)*2,
-                               rel_R0_mean = 0.18,rel_R0_var=0.001)
+                               rel_R0_par1=7.04,
+                               rel_R0_par2=65.16,
+                               prop_susceptible_par1 = 39.34,
+                               prop_susceptible_par2 = 144.52,
+                               prop_refractory_par1 = 4.66,
+                               prop_refractory_par2 = 31.64
+                               )
 
 
 trajectories <- res$simulation_results
@@ -100,12 +106,14 @@ for(j in 1:nrow(pars)){
                              observed_data=NULL,
                              continue_run=TRUE,
                              tmax=500,
-                             latent_period=pars$latent_period[j],
-                             infect_scale=pars$infect_scale[j],infect_shape=pars$infect_shape[j],
-                             infect_ps_par=pars$infect_ps_par[j],
-                             #infect_scale_ps=infect_ps_scale[j],infect_shape_ps=infect_ps_shape[j],
-                             incu_scale=pars$incu_scale[j],incu_shape=pars$incu_shape[j],
-                             prob_paralysis_s = pars$prob_paralysis_s[j], prob_paralysis_ps = pars$prob_paralysis_ps[j],
+                             infect_rate=pars$infect_rate[j],
+                             infect_shape=pars$infect_shape[j],
+                             infect_partial_shape=pars$infect_partial_shape[j],
+                             infect_partial_rate=pars$infect_partial_rate[j],
+                             incu_scale=pars$incu_scale[j],
+                             incu_shape=pars$incu_shape[j],
+                             prob_paralysis_s = pars$prob_paralysis_s[j], 
+                             prob_paralysis_ps = pars$prob_paralysis_ps[j],
                              prop_immune_groups = as.numeric(pars[j,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
     
     dat <- tmp$dat
@@ -133,5 +141,3 @@ if(length(use_samps) > 1){
     save(res2, file=paste0("sims_traj/traj_",i,".RData"))
     
 }
-
-#traj_future_par %>% ggplot() + geom_line(aes(x=t,y=para,group=interaction(sim,rep)))

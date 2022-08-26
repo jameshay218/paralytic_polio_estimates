@@ -47,6 +47,10 @@ traj_nyc <- traj_nyc %>% left_join(res %>% select(sim, date_start)) %>%
     drop_na() 
 
 traj$vacc_prop <- as.factor(traj$vacc_prop)
+trajectories <- traj %>% filter(vacc_prop==1) %>% dplyr::select(-c(vacc_prop,rep))
+save(trajectories,file="../outputs/fitted_trajectories.RData")
+save(traj_nyc,file="../outputs/nyc_trajectories.RData")
+save(res,file="../outputs/filtered_parameters.RData")
 
 #res <- res %>% filter(date_start > "2022-05-01")
 

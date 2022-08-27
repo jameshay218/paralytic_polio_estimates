@@ -4,7 +4,7 @@ setwd("~/paralytic_polio_estimates")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 1000
+nsims <- 10000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #i <- 1
@@ -100,21 +100,22 @@ save(pars, file=paste0("sims/simulation_",i,".RData"))
 ## Rerun for NYC-like place
 nyc <- NULL
 for(j in 1:nrow(pars)){
-    tmp <- run_simulation_twoimmune(R0=pars$R0[j], rel_R0=pars$rel_R0[j],
+    tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
+                                    rel_R0=0.089,
                                     P=8800000,
                                     ini_infs=1,
                              observed_data=NULL,
                              continue_run=TRUE,
                              tmax=500,
-                             infect_rate=pars$infect_rate[j],
-                             infect_shape=pars$infect_shape[j],
-                             infect_partial_shape=pars$infect_partial_shape[j],
-                             infect_partial_rate=pars$infect_partial_rate[j],
+                             infect_rate=0.313,
+                             infect_shape=3.96,
+                             infect_partial_shape=2.48,
+                             infect_partial_rate=0.243,
                              incu_scale=pars$incu_scale[j],
                              incu_shape=pars$incu_shape[j],
                              prob_paralysis_s = pars$prob_paralysis_s[j], 
                              prob_paralysis_ps = pars$prob_paralysis_ps[j],
-                             prop_immune_groups = as.numeric(pars[j,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
+                             prop_immune_groups = c(0.158,(1-0.158-0.169),0.169))#as.numeric(pars[j,c("prop_immune_groups.1","prop_immune_groups.2","prop_immune_groups.3")]))
     
     dat <- tmp$dat
     dat$sim <- pars$sim[j]

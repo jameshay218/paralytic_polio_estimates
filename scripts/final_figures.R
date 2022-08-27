@@ -356,15 +356,21 @@ tmp_comb1 <- tmp_comb %>% filter(t %in% as.Date(c("2022-09-01","2022-10-01","202
     mutate(date2=paste0("Cases observed by ", date1))
 tmp_comb1$date2 <- factor(tmp_comb1$date1,levels=c("Cases observed by Sep","Cases observed by Oct","Cases observed by Nov","Cases observed by Dec"))
 tmp_comb1$date1 <- factor(tmp_comb1$date1, levels=c("Sep","Oct","Nov","Dec"))
-fig2B <- tmp_comb1 %>%   ggplot() +
+fig2B <- tmp_comb1 %>%   
+    mutate(model=paste0("k=",model)) %>%
+    ggplot() +
     geom_bar(aes(x=model,y=median_para,fill=model),stat="identity",col="black") +
     geom_errorbar(aes(x=model,ymin=lower,ymax=upper),width=0.5) +
-    facet_wrap(~date1,nrow=1) +
-    xlab("Additional cases observed by month shown") +
+    facet_wrap(~date1,nrow=1,strip.position="bottom") +
+    xlab("Month by which k additional cases observed") +
     ylab(paste0("Projected paralysis cases\n by ", max_date)) +
     theme_classic() +
     scale_fill_nejm() +
     theme(legend.position="none",strip.background = element_blank(),
-          panel.grid.major=element_line(size=0.1,color="grey70")) +
+          panel.grid.major=element_line(size=0.1,color="grey70"),
+          strip.placement = "outside"
+         ) +
     scale_y_continuous(expand=c(0,0),limits=c(0,45))
+
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.pdf", fig1, height=7,width=8)
 fig2B

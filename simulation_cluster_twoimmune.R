@@ -102,7 +102,7 @@ nyc <- NULL
 for(j in 1:nrow(pars)){
     tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
                                     rel_R0=0.089,
-                                    P=8800000,
+                                    P=8336817,
                                     ini_infs=1,
                              observed_data=NULL,
                              continue_run=TRUE,

@@ -95,11 +95,15 @@ if(restart_simulation){
 
         ## Initial infections in the fully susceptible group
         new_infections_s <- rep(0, tmax + max_incu_period)
-        new_infections_s[1] <- ini_infs
         new_infections_ps <- rep(0, tmax + max_incu_period)
         
-        fully_susceptible[2] <- fully_susceptible[1] - ini_infs
-        
+        if(length(ini_infs) == 1){
+            new_infections_s[1] <- ini_infs
+            fully_susceptible[2] <- fully_susceptible[1] - ini_infs
+        } else {
+            new_infections_s[1:length(ini_infs)] <- ini_infs
+            
+        }
         paralysis_incidence_s <- rep(0, tmax + max_incu_period)
         paralysis_incidence_ps <- rep(0, tmax + max_incu_period)
         total_paralysis_cases <- 0
@@ -156,8 +160,8 @@ if(restart_simulation){
             ## If we simulated an infection
             if(inc >= 1){
                 ## Set infection states of new infections and record time of infection
-                new_infections_s[t] <- inc_s
-                new_infections_ps[t] <- inc_ps
+                new_infections_s[t] <- new_infections_s[t] + inc_s
+                new_infections_ps[t] <- new_infections_ps[t] + inc_ps
                 
                 ## Simulate paralysis cases from these new infections
                 paralysis_cases_s <- rbinom(1, inc_s, prob_paralysis_s)

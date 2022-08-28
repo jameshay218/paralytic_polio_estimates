@@ -7,7 +7,7 @@ library(paletteer)
 setwd("~/Documents/GitHub/paralytic_polio_estimates/")
 source("simulation_functions_twoimmune.R")
 max_date <- "2023-04-01"
-
+summarize <- dplyr::summarize
 setwd("~/Documents/GitHub/paralytic_polio_estimates/sims/")
 all_res <-  NULL
 for(i in 1:1000){
@@ -18,6 +18,7 @@ for(i in 1:1000){
 }
 res <- as_tibble(do.call("bind_rows",all_res))
 res <- res %>% select(-c(Rt, inc_s,inc_ps,para,para_s,para_ps))
+
 
 setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_traj/")
 all_traj <-  NULL
@@ -44,9 +45,30 @@ traj <- traj %>% left_join(res %>% select(sim, date_start)) %>%
     mutate(t = as.Date(date_start + t)) %>%
     drop_na() 
 
-traj_nyc <- traj_nyc %>% left_join(res %>% select(sim, date_start)) %>%
-    mutate(t = as.Date(date_start + t)) %>%
+## Get cumulative incidenc
+traj <- traj %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
+                                          cumu_para = cumsum(para))
+traj <- traj %>% ungroup() %>% mutate(month = round_date(t, "month"))
+
+## Rockland county trajectories only valid if they have some cases in May, June, July and August
+traj %>% filter(month %in% as.Date(c("2022-05-01","2022-06-01","2022-07-01","2022-08-01"))) %>% group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% mutate(keep=monthly_inc > 0) %>% select(sim, keep, month) %>% pivot_wider(id_cols = sim,values_from="keep",names_from="month") %>%
+    filter(`2022-05-01`==TRUE,`2022-06-01`==TRUE,`2022-07-01`==TRUE,`2022-08-01`==TRUE) %>% pull(sim) -> wastewater_sims
+traj <- traj %>% filter(sim %in% wastewater_sims)
+res <- res %>% filter(sim %in% wastewater_sims)
+## Assume NYC is seeded 4 weeks later
+traj_nyc <- traj_nyc %>% 
+    left_join(res %>% select(sim, date_start)) %>%
+    mutate(t = as.Date(date_start + t) + 28) %>%
     drop_na() 
+
+traj_nyc <- traj_nyc %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
+                                          cumu_para = cumsum(para))
+traj_nyc <- traj_nyc %>% ungroup() %>% mutate(month = round_date(t, "month"))
+## NYC trajectories only acceptable if they have cases in June and July
+traj_nyc %>% filter(month %in% as.Date(c("2022-06-01","2022-07-01"))) %>% group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% mutate(keep=monthly_inc > 0) %>% select(sim, keep, month) %>% pivot_wider(id_cols = sim,values_from="keep",names_from="month") %>%
+    filter(`2022-06-01`==TRUE,`2022-07-01`==TRUE) %>% pull(sim) -> wastewater_sims_nyc
+traj_nyc <- traj_nyc %>% filter(sim %in% wastewater_sims_nyc)
+
 
 traj$vacc_prop <- as.factor(traj$vacc_prop)
 trajectories <- traj %>% filter(vacc_prop==1) %>% dplyr::select(-c(vacc_prop,rep))
@@ -227,7 +249,7 @@ flag_traj <- trajectories %>% group_by(sim) %>%
     select(sim, t, no_new_para, one_new_para,two_new_para, three_new_para)
 
 
-## Find total paralysis cases by 31st December 2022
+## Find total paralysis cases by end date
 traj_cumu_para <- trajectories %>% 
     group_by(sim) %>% mutate(para=cumsum(para)) %>% 
     filter(t == max_date) %>%
@@ -275,11 +297,16 @@ quantile_lower <- 0.1
 quantile_upper <- 0.9
 for(i in seq_along(dates)){
     print(i)
-    subset_flags1 <- subset_flags1 %>% filter(last_date_no_cases >= dates[i])
-    subset_flags2 <- subset_flags2 %>% filter(last_date_one_case >= dates[i])
-    subset_flags3 <- subset_flags3 %>% filter(last_date_two_cases >= dates[i])
-    subset_flags4 <- subset_flags4 %>% filter(last_date_three_cases >= dates[i])
-    ns[i] <- nrow(subset_flags)
+    subset_flags1 <- subset_flags1 %>% filter(
+        !is.na(last_date_no_cases) &
+        last_date_no_cases >= dates[i])
+    subset_flags2 <- subset_flags2 %>% filter(
+        !is.na(last_date_one_case) &last_date_one_case >= dates[i])
+    subset_flags3 <- subset_flags3 %>% filter(
+        !is.na(last_date_two_cases) &last_date_two_cases >= dates[i])
+    subset_flags4 <- subset_flags4 %>% filter(
+        !is.na(last_date_three_cases) &last_date_three_cases >= dates[i])
+    ns[i] <- nrow(subset_flags1)
     all_no_para[[i]] <- subset_flags1 %>% 
         dplyr::summarize(median_para=median(total_para),
                          mean_para=mean(total_para),
@@ -372,5 +399,81 @@ fig2B <- tmp_comb1 %>%
          ) +
     scale_y_continuous(expand=c(0,0),limits=c(0,45))
 
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.pdf", fig1, height=7,width=8)
-fig2B
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.pdf", fig1, height=6,width=8)
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.png", fig1, height=6,width=8,units='in',dpi=300)
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2.pdf", fig2B, height=3,width=7)
+
+fig2_alt <- (fig2B+labs(tag="A"))/(fig2B_nyc + labs(tag="B"))
+
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_alt.pdf", fig2_alt, height=5,width=7)
+ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_alt.png", fig2_alt, height=5,width=7,units="in",dpi=300)
+
+
+## Numbers for paper
+## % showing continued spread by August 20th
+trajectories %>% filter(t == "2022-08-20") %>%
+    group_by(ongoing_7) %>% tally() %>%
+    pivot_wider(values_from=n,names_from=ongoing_7) %>%
+    mutate(prop=`TRUE`/(`TRUE` + `FALSE`))
+
+## Effective reproduction number at seeding
+trajectories %>% group_by(sim) %>%
+    filter(t == min(t)) %>%
+    ungroup() %>%
+    dplyr::summarize(mean_re=mean(Rt),median_re=median(Rt),
+              lower90=quantile(Rt,0.1),upper90=quantile(Rt,0.9))
+
+## Generation interval estimate
+res$infectious_period_mean %>% mean
+quantile(res$infectious_period_mean,c(0.1,0.9))
+
+## Doubling time
+
+## 22nd June number of infections
+trajectories %>% filter(t == as.Date("2022-06-22")) %>% 
+    ungroup() %>% summarize(mean_inf = mean(cumu_inc),
+                            median_inf = median(cumu_inc),
+                            lower90=quantile(cumu_inc,0.1),
+                            upper90=quantile(cumu_inc,0.9))
+
+## 18nd July number of infections
+trajectories %>% filter(t == as.Date("2022-07-18")) %>% 
+    ungroup() %>% summarize(mean_inf = mean(cumu_inc),
+                            median_inf = median(cumu_inc),
+                            lower90=quantile(cumu_inc,0.1),
+                            upper90=quantile(cumu_inc,0.9))
+
+## 20th August number of infections
+trajectories %>% filter(t == as.Date("2022-08-20")) %>% 
+    ungroup() %>% summarize(mean_inf = mean(cumu_inc),
+                            median_inf = median(cumu_inc),
+                            lower90=quantile(cumu_inc,0.1),
+                            upper90=quantile(cumu_inc,0.9))
+
+## 1st April 2023 number of infections
+## 22nd June number of infections
+trajectories %>% filter(t == as.Date(max_date)) %>% 
+    ungroup() %>% summarize(mean_inf = mean(cumu_inc),
+                            median_inf = median(cumu_inc),
+                            lower90=quantile(cumu_inc,0.1),
+                            upper90=quantile(cumu_inc,0.9))
+
+## Number of paralytic polio by 1st April
+trajectories %>% filter(t == as.Date(max_date)) %>% 
+    ungroup() %>% summarize(mean_para = mean(cumu_para),
+                            median_para = median(cumu_para),
+                            lower90=quantile(cumu_para,0.1),
+                            upper90=quantile(cumu_para,0.9))
+
+## Number of paralytic polio by 20th August if no further cases by 1st Oct
+traj_summary %>% filter(t == as.Date("2022-08-20")) %>%
+    mutate(prop=1-prop,lower=1-lower,upper=1-upper)
+
+
+## Number of paralytic polio by 1st April if 1 further case by 1st Oct
+traj_summary %>% filter(t == max_date)
+
+
+## Probability of not seeing any cases in NYC at all
+
+## Number of paralysis in NYC if we see 1 case on or after 1st October by 1st April 2023

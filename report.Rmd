@@ -3,6 +3,7 @@ title: "Estimate for the number of unobserved polio infections"
 output:
   pdf_document: default
   html_document: default
+  word_document: default
 date: "2022-08-22"
 ---
 
@@ -230,7 +231,7 @@ incubation_period <- function(t, incu_scale, incu_shape, max_incu_period=50){
     extraDistr::ddgamma(t,scale=incu_scale,shape=incu_shape)/extraDistr::pdgamma(max_incu_period,scale=incu_scale,shape=incu_shape)
 }
 infectiousness <- function(t,infect_rate,infect_shape,max_infectious_period=50){
-    extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,scale=infect_scale)
+    extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,rate=infect_rate)
 }
 
 

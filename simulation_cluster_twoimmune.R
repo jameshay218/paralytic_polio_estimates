@@ -1,5 +1,7 @@
 library(dplyr)
 library(tidyr)
+library(tidyverse)
+library(lubridate)
 
 setwd("~/paralytic_polio_estimates")
 #setwd("~/Documents/GitHub/paralytic_polio_estimates")
@@ -100,7 +102,6 @@ pars <- pars %>%
 trajectories <- trajectories %>% left_join(pars %>% select(sim, date_start)) %>%
     mutate(t = as.Date(date_start + t)) %>%
     drop_na() 
-
 
 ## Flag which runs are consistent with the data
 use_samps <- paralysis_totals %>% filter(consistent == TRUE) %>% pull(sim)

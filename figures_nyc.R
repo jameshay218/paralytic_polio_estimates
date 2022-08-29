@@ -1,29 +1,3 @@
-## Pad prematurely ended trajectories with zeros
-N_tot <- length(unique(traj_nyc$sim))
-## Pad up to this date
-end_date <- max(traj_nyc$t)
-## Create dummy rows from this date onward, unique to each sim
-max_t1 <- traj_nyc %>% group_by(sim) %>% filter(t==max(t)) %>% select(sim, t, date_start) %>% mutate(t = t + 1) %>% rename(max_t=t) %>% mutate(max_date=end_date)
-
-## Create the dummy rows
-extra_rows <- max_t1 %>%
-    filter(max_t < max_date) %>%
-    group_by(sim) %>%
-    distinct() %>%
-    do(data.frame(sim=.$sim, t=seq(.$max_t,.$max_date,by="1 day")))
-extra_rows <- extra_rows %>% mutate(inc=0,inc_s=0,inc_ps=0,para=0,para_s=0,para_ps=0, Rt=0)
-
-## Add the dummy rows in
-extra_rows <- extra_rows %>% left_join(traj_nyc %>% select(sim, date_start) %>% distinct())
-traj_nyc <- bind_rows(traj_nyc,extra_rows) %>% arrange(sim, t)
-traj_nyc <- traj_nyc %>% mutate(Rt = ifelse(is.na(Rt),0, Rt))
-traj_nyc <- traj_nyc %>% group_by(sim) %>% mutate(cumu_para=cumsum(para)) %>% ungroup()
-traj_nyc <- traj_nyc %>% group_by(sim) %>% 
-    ## If cases aren't what they were 7 days ago, then the epidemic is still ongoing
-    mutate(cumu_inc=cumsum(inc)) %>% 
-    mutate(ongoing_7= cumu_inc != lag(cumu_inc,7,nafill(0))) %>%
-    ungroup()
-
 ## For every day after 2022-08-20, if we've seen another 0, 1, 2 or 3 
 ## cases of paralysis, flag
 nyc_sims <- traj_nyc %>% group_by(sim) %>% 

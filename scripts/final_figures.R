@@ -10,6 +10,11 @@ source("simulation_functions_twoimmune.R")
 max_date <- "2023-04-01"
 summarize <- dplyr::summarize
 setwd("~/Documents/GitHub/paralytic_polio_estimates/sims/")
+
+show_col(pal_nejm("default")(8))
+nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
+
+# Read in simulation runs and combine -------------------------------------
 all_res <-  NULL
 for(i in 1:1000){
     if(file.exists(paste0("simulation_",i,".RData"))){
@@ -42,20 +47,16 @@ for(i in 1:1000){
 traj_nyc <- as_tibble(do.call("bind_rows",all_nyc))
 
 
+## Set day 0
 traj <- traj %>% left_join(res %>% select(sim, date_start)) %>%
     mutate(t = as.Date(date_start + t)) %>%
     drop_na() 
 
-## Get cumulative incidenc
+## Get cumulative incidence
 traj <- traj %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
                                           cumu_para = cumsum(para))
 traj <- traj %>% ungroup() %>% mutate(month = round_date(t, "month"))
 
-## Rockland county trajectories only valid if they have some cases in May, June, July and August
-traj %>% filter(month %in% as.Date(c("2022-05-01","2022-06-01","2022-07-01","2022-08-01"))) %>% group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% mutate(keep=monthly_inc > 0) %>% select(sim, keep, month) %>% pivot_wider(id_cols = sim,values_from="keep",names_from="month") %>%
-    filter(`2022-05-01`==TRUE,`2022-06-01`==TRUE,`2022-07-01`==TRUE,`2022-08-01`==TRUE) %>% pull(sim) -> wastewater_sims
-traj <- traj %>% filter(sim %in% wastewater_sims)
-res <- res %>% filter(sim %in% wastewater_sims)
 ## Assume NYC is seeded 4 weeks later
 traj_nyc <- traj_nyc %>% 
     left_join(res %>% select(sim, date_start)) %>%
@@ -65,11 +66,6 @@ traj_nyc <- traj_nyc %>%
 traj_nyc <- traj_nyc %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
                                           cumu_para = cumsum(para))
 traj_nyc <- traj_nyc %>% ungroup() %>% mutate(month = round_date(t, "month"))
-## NYC trajectories only acceptable if they have cases in June and July
-traj_nyc %>% filter(month %in% as.Date(c("2022-06-01","2022-07-01"))) %>% group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% mutate(keep=monthly_inc > 0) %>% select(sim, keep, month) %>% pivot_wider(id_cols = sim,values_from="keep",names_from="month") %>%
-    filter(`2022-06-01`==TRUE,`2022-07-01`==TRUE) %>% pull(sim) -> wastewater_sims_nyc
-traj_nyc <- traj_nyc %>% filter(sim %in% wastewater_sims_nyc)
-
 
 traj$vacc_prop <- as.factor(traj$vacc_prop)
 trajectories <- traj %>% filter(vacc_prop==1) %>% dplyr::select(-c(vacc_prop,rep))
@@ -77,49 +73,58 @@ save(trajectories,file="../outputs/fitted_trajectories.RData")
 save(traj_nyc,file="../outputs/nyc_trajectories.RData")
 save(res,file="../outputs/filtered_parameters.RData")
 
-## Pad prematurely ended trajectories with zeros
-N_tot <- length(unique(trajectories$sim))
-## Pad up to this date
-end_date <- max(trajectories$t)
-## Create dummy rows from this date onward, unique to each sim
-max_t1 <- trajectories %>% group_by(sim) %>% filter(t==max(t)) %>% select(sim, t, date_start) %>% mutate(t = t + 1) %>% rename(max_t=t) %>% mutate(max_date=end_date)
+# Clean trajectories ------------------------------------------------------
+## Rockland County
+pad_rows <- function(tmp_traj){
+    ## Pad prematurely ended trajectories with zeros
+    N_tot <- length(unique(tmp_traj$sim))
+    ## Pad up to this date
+    end_date <- max(tmp_traj$t)
+    ## Create dummy rows from this date onward, unique to each sim
+    max_t1 <- tmp_traj %>% group_by(sim) %>% filter(t==max(t)) %>% 
+        select(sim, t, date_start) %>% mutate(t = t + 1) %>% 
+        rename(max_t=t) %>% mutate(max_date=end_date)
+    
+    ## Create the dummy rows
+    extra_rows <- max_t1 %>%
+        filter(max_t < max_date) %>%
+        group_by(sim) %>%
+        distinct() %>%
+        do(data.frame(sim=.$sim, t=seq(.$max_t,.$max_date,by="1 day")))
+    extra_rows <- extra_rows %>% mutate(inc=0,inc_s=0,inc_ps=0,para=0,para_s=0,para_ps=0, Rt=0)
+    
+    ## Add the dummy rows in
+    extra_rows <- extra_rows %>% left_join(tmp_traj %>% select(sim, date_start) %>% distinct())
+    tmp_traj <- bind_rows(tmp_traj,extra_rows) %>% arrange(sim, t)
+    tmp_traj <- tmp_traj %>% mutate(Rt = ifelse(is.na(Rt),0, Rt))
+    tmp_traj <- tmp_traj %>% group_by(sim) %>% mutate(cumu_para=cumsum(para)) %>% ungroup()
+    tmp_traj <- tmp_traj %>% group_by(sim) %>% 
+        ## If cases aren't what they were 7 days ago, then the epidemic is still ongoing
+        mutate(cumu_inc=cumsum(inc)) %>% 
+        mutate(ongoing_7= cumu_inc != lag(cumu_inc,7,nafill(0))) %>%
+        ungroup()
+    tmp_traj
+}
+trajectories <- pad_rows(trajectories)
+traj_nyc <- pad_rows(traj_nyc)
 
-## Create the dummy rows
-extra_rows <- max_t1 %>%
-    filter(max_t < max_date) %>%
-    group_by(sim) %>%
-    distinct() %>%
-    do(data.frame(sim=.$sim, t=seq(.$max_t,.$max_date,by="1 day")))
-extra_rows <- extra_rows %>% mutate(inc=0,inc_s=0,inc_ps=0,para=0,para_s=0,para_ps=0, Rt=0)
-
-## Add the dummy rows in
-extra_rows <- extra_rows %>% left_join(trajectories %>% select(sim, date_start) %>% distinct())
-trajectories <- bind_rows(trajectories,extra_rows) %>% arrange(sim, t)
-trajectories <- trajectories %>% mutate(Rt = ifelse(is.na(Rt),0, Rt))
-trajectories <- trajectories %>% group_by(sim) %>% mutate(cumu_para=cumsum(para)) %>% ungroup()
-trajectories <- trajectories %>% group_by(sim) %>% 
-    ## If cases aren't what they were 7 days ago, then the epidemic is still ongoing
-    mutate(cumu_inc=cumsum(inc)) %>% 
-    mutate(ongoing_7= cumu_inc != lag(cumu_inc,7,nafill(0))) %>%
-    ungroup()
-
-## No further cases observed
+## Flag if further cases observed or not
 tmp_flags <- trajectories %>% filter(t <= "2022-10-01") %>% group_by(sim) %>% dplyr::summarise(y=sum(para)) %>% mutate(no_further_cases=y==1)
 
+## Summarize proportion of trajectories with ongoing incidence over time
 traj_summary1 <- trajectories %>% filter(t <= max_date) %>% 
-    #mutate(y=Rt<1) %>% 
     mutate(y=ongoing_7 == TRUE) %>%
     group_by(t) %>%
     dplyr::summarize(
         median_para=median(cumu_para),lower1=quantile(cumu_para,0.1),upper1=quantile(cumu_para,0.9),
         y=sum(y),N=n(),prop=sum(y))%>% group_by(t) %>% 
-    mutate(
-        prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3]) %>%
+    mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3]) %>%
     mutate(model="Current data")
+
+## Calculate extinction probability if no further cases observed
 traj_summary2 <- trajectories %>% left_join(tmp_flags) %>%
     filter(no_further_cases==TRUE) %>%
     filter(t <= max_date) %>% 
-    #mutate(y=Rt<1) %>% 
     mutate(y=ongoing_7 == TRUE) %>%
     group_by(t) %>% 
     dplyr::summarize(
@@ -127,10 +132,11 @@ traj_summary2 <- trajectories %>% left_join(tmp_flags) %>%
         y=sum(y),N=n())%>% group_by(t) %>% 
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
     mutate(model="No cases by October 1st")
+
+## Calculate extinction probability if further cases observed
 traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
     filter(no_further_cases==FALSE) %>%
     filter(t <= max_date) %>% 
-    #mutate(y=Rt<1) %>% 
     mutate(y=ongoing_7 == TRUE) %>%
     group_by(t) %>% 
     dplyr::summarize(
@@ -139,84 +145,52 @@ traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
     mutate(model="Further cases reported\n by October 1st")
 
-
+## Combine
 traj_summary <- bind_rows(traj_summary1,traj_summary2,traj_summary3)
 
 ## Plot some trajectories
-sub_sims <- sample(unique(trajectories$sim),25)
-p_traj <- trajectories %>% filter(sim %in% sub_sims) %>% 
-    filter(t <= as.Date("2022-08-26")) %>%
+set.seed(1)
+sub_sims1 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==TRUE) %>% 
+    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+sub_sims2 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==FALSE) %>% 
+    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+trajectories <- trajectories %>% 
+    left_join(tmp_flags) %>%
+    mutate(`Consistent with further\n paralytic polio\n by 2022-10-21` = ifelse(no_further_cases==TRUE,"Yes","No")) 
+
+p_traj <- trajectories %>% 
+    filter(sim %in% c(sub_sims1,sub_sims2)) %>% 
+    filter(t <= as.Date("2022-10-21")) %>%
     ggplot() +
-    geom_line(aes(x=t,y=inc,group=sim),size=0.25,color="grey40") +
-    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-08-20")),y=0,yend=6000),
+    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=6000),
+              aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill="black",alpha=0.1) +
+    
+    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=4300,ymax=5300),
+              aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=nejm_palette[6],alpha=0.25) +
+    
+    geom_line(aes(x=t,y=inc,group=sim,col=`Consistent with further\n paralytic polio\n by 2022-10-21`),size=0.25) +
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),
+                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,5300,0),yend=c(4300,6000,6000)),
                  aes(x=x,xend=xend,y=y,yend=yend),
                  linetype="dashed") +    
     geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=6250,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),size=2.5) +
+                              y=6350,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),size=2.5) +
+    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=4750,lab="Positive wastewater samples\n from Rockland County"),
+              aes(x=x,y=y,label=lab),size=2.5) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
-    scale_x_date(date_labels="%b",breaks="month") +
-    scale_y_continuous(limits=c(0,6500),expand=c(0,0),breaks=seq(0,6000,by=1000)) +
+    scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
+    scale_y_continuous(limits=c(0,6600),expand=c(0,0),breaks=seq(0,6000,by=1000)) +
     theme_classic() +
-    scale_fill_nejm() +
-    scale_color_nejm() +
+    scale_color_manual(values=c("Yes"=nejm_palette[4],"No"=nejm_palette[5])) +
     theme(axis.text=element_text(size=6),
           axis.title=element_text(size=8),
           legend.text=element_text(size=6),
           legend.title=element_text(size=6),
+          legend.position=c(0.15,0.8),
           panel.grid.major = element_line(size=0.1,color="grey70")) +
     labs(tag="A")
-
-p1 <- ggplot(traj_summary) + 
-    geom_ribbon(aes(x=t,ymin=lower,ymax=upper,fill=model),alpha=0.25) +
-    geom_line(aes(x=t,y=prop,col=model)) +
-    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=1.12,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),size=2.5) +
-    scale_y_continuous(limits=c(0,1.15),breaks=seq(0,1,by=0.2)) +
-    
-    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-08-20")),
-                                 y=0,yend=1),
-                 aes(x=x,xend=xend,y=y,yend=yend),
-               linetype="dashed") +    ylab("Probability epidemic is ongoing\n (cases in previous 7 days)")+
-    theme_classic() +
-    scale_fill_nejm() +
-    scale_color_nejm() +
-    
-    scale_x_date(limits=as.Date(c("2022-06-01",max_date)),
-                 breaks="1 month") +    
-    theme(legend.position="none",axis.text.x=element_blank(),
-          axis.line.x=element_blank(),axis.title.x=element_blank(),
-          axis.ticks.x=element_blank(),axis.text.y=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6),
-          panel.grid.major = element_line(size=0.1,color="grey70")) +
-    labs(tag="B")
-
-p2 <- ggplot(traj_summary) + 
-    geom_ribbon(aes(x=t,ymin=lower1,ymax=upper1,fill=model),alpha=0.25) +
-    geom_line(aes(x=t,y=median_para,col=model)) +
-    geom_vline(xintercept=as.Date(c("2022-06-22","2022-08-20")),
-linetype="dashed") +
-    ylab("Cumulative paralysis cases") +
-    scale_x_date(limits=as.Date(c("2022-06-01",max_date)),
-                 breaks="1 month") +
-    theme_classic() +
-    xlab("Date") +
-    scale_fill_nejm(name="Data assumption")+
-    scale_color_nejm(name="Data assumption")+
-    theme(legend.position="bottom",
-          panel.grid.major = element_line(size=0.1,color="grey70"),
-          axis.text.x=element_text(angle=45,hjust=1,size=6),
-          axis.text.y=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6))+
-    labs(tag="D")
-
-
+p_traj
 
 
 p_final_size <- trajectories %>% group_by(sim) %>%
@@ -224,7 +198,7 @@ p_final_size <- trajectories %>% group_by(sim) %>%
     filter(t == "2022-08-20") %>% 
     mutate(model = "Current data") %>%
     ggplot() + geom_histogram(aes(x=y,fill=model),binwidth=10000,
-                              color="black",fill='grey70') +
+                                  color="black",fill=nejm_palette[3],alpha=0.25) +
     scale_x_continuous(breaks=seq(0,250000,by=100000))+
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
@@ -235,24 +209,7 @@ p_final_size <- trajectories %>% group_by(sim) %>%
           legend.text=element_text(size=6),
           legend.title=element_text(size=6)) +
     scale_fill_nejm()+
-    labs(tag="E")
-
-p_re <- trajectories %>% 
-    group_by(sim) %>%
-    filter(t == min(t)) %>%
-    #mutate(model = "Current data") %>%
-    ggplot() + geom_density(aes(x=Rt),color="black",fill="grey70") +
-    geom_vline(xintercept=1,linetype="dashed") +
-    scale_y_continuous(expand=c(0,0)) +
-    theme_classic() +
-    xlab("Initial effective reproductive number") + ylab("Density") +
-    theme(axis.text=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.position="none",
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6)) +
-    scale_fill_nejm() +
-    labs(tag="C")
+    labs(tag="B")
 
 p_start <- trajectories %>% 
     group_by(sim) %>%
@@ -269,123 +226,204 @@ p_start <- trajectories %>%
           legend.title=element_text(size=6)) +
     scale_fill_nejm() +
     labs(tag="B")
+p_re <- trajectories %>% 
+    group_by(sim) %>%
+    filter(t == min(t)) %>%
+    #mutate(model = "Current data") %>%
+    ggplot() + geom_density(aes(x=Rt),color="black",fill=nejm_palette[3],alpha=0.25) +
+    geom_vline(xintercept=1,linetype="dashed") +
+    scale_y_continuous(expand=c(0,0)) +
+    theme_classic() +
+    xlab("Initial effective reproductive number") + ylab("Density") +
+    theme(axis.text=element_text(size=6),
+          axis.title=element_text(size=8),
+          legend.position="none",
+          legend.text=element_text(size=6),
+          legend.title=element_text(size=6)) +
+    scale_fill_nejm() +
+    labs(tag="C")
 
+pX <- (p_re/p_final_size)
+p_top <- p_traj + pX + plot_layout(ncol=2,widths=c(3,1))
 
+p1 <- ggplot(traj_summary) + 
+    geom_ribbon(aes(x=t,ymin=1-upper,ymax=1-lower,fill=model),alpha=0.25) +
+    geom_line(aes(x=t,y=1-prop,col=model)) +
+    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
+                              y=1.12,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),size=2.5) +
+    scale_y_continuous(limits=c(0,1.15),breaks=seq(0,1,by=0.2)) +
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
+                                 xend=as.Date(c("2022-06-22","2022-08-20")),
+                                 y=0,yend=1),
+                 aes(x=x,xend=xend,y=y,yend=yend),
+               linetype="dashed") +    ylab("Probability epidemic is extinct\n (no cases in previous 7 days)")+
+    theme_classic() +
+    scale_fill_manual(values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
+                               "Further cases reported\n by October 1st"=nejm_palette[1])) +
+    scale_color_manual(values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
+                               "Further cases reported\n by October 1st"=nejm_palette[1]))  +
+    
+    scale_x_date(date_label="%b",limits=as.Date(c("2022-06-01",max_date)),
+                 breaks="1 month") +    
+    theme(legend.position="none",axis.text.x=element_blank(),
+          axis.line.x=element_blank(),axis.title.x=element_blank(),
+          axis.ticks.x=element_blank(),axis.text.y=element_text(size=6),
+          axis.title=element_text(size=8),
+          legend.text=element_text(size=6),
+          legend.title=element_text(size=6),
+          panel.grid.major = element_line(size=0.1,color="grey70")) +
+    labs(tag="D")
 
-fig1 <- p1 + p2 + p_re +p_final_size +plot_layout(ncol=2,widths=c(2.5,1),byrow=FALSE)
+p2 <- ggplot(traj_summary) + 
+    geom_ribbon(aes(x=t,ymin=lower1,ymax=upper1,fill=model),alpha=0.25) +
+    geom_line(aes(x=t,y=median_para,col=model)) +
+    geom_vline(xintercept=as.Date(c("2022-06-22","2022-08-20")),
+linetype="dashed") +
+    ylab("Cumulative paralysis cases") +
+    scale_x_date(date_label="%b",limits=as.Date(c("2022-06-01",max_date)),
+                 breaks="1 month") +
+    theme_classic() +
+    xlab("Date") +
+    scale_fill_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
+                               "Further cases reported\n by October 1st"=nejm_palette[1])) +
+    scale_color_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
+                                "Further cases reported\n by October 1st"=nejm_palette[1])) +
+    theme(legend.position="bottom",
+          panel.grid.major = element_line(size=0.1,color="grey70"),
+          axis.text.x=element_text(size=6),
+          axis.text.y=element_text(size=6),
+          axis.title=element_text(size=8),
+          legend.text=element_text(size=6),
+          legend.title=element_text(size=6))+
+    labs(tag="E")
+
+fig1 <- p_top / p1 / p2
 fig1
 
+
+# Hypothetical further observations ---------------------------------------
 ## For every day after 2022-08-20, if we've seen another 0, 1, 2 or 3 
 ## cases of paralysis, flag
-
-flag_traj <- trajectories %>% group_by(sim) %>% 
-    filter(t > "2022-08-20", t <= max_date) %>%
-    group_by(sim) %>% 
-    mutate(cumu_para=cumsum(para)) %>%
-    ungroup() %>%
-    ## Flag when we've seen 1, 2 or 3 total cases after 20th August
-    mutate(
-            no_new_para = cumu_para == 0, ## Have still no cases
-            one_new_para=cumu_para == 1, ## I have only seen one case
-           two_new_para=cumu_para == 2, ## I have only seen two cases
-           three_new_para=cumu_para == 3 ## I have only seen three cases
-           ) %>%
-    select(sim, t, no_new_para, one_new_para,two_new_para, three_new_para)
-
-
-## Find total paralysis cases by end date
-traj_cumu_para <- trajectories %>% 
-    group_by(sim) %>% mutate(para=cumsum(para)) %>% 
-    filter(t == max_date) %>%
-    select(sim, para) %>%
-    rename(total_para=para)
+get_flag_traj <- function(tmp_traj){
+    flag_traj <- tmp_traj %>% group_by(sim) %>% 
+        filter(t > "2022-08-20", t <= max_date) %>%
+        group_by(sim) %>% 
+        mutate(cumu_para=cumsum(para)) %>%
+        ungroup() %>%
+        ## Flag when we've seen 1, 2 or 3 total cases after 20th August
+        mutate(
+                no_new_para = cumu_para == 0, ## Have still no cases
+                one_new_para=cumu_para == 1, ## I have only seen one case
+               two_new_para=cumu_para == 2, ## I have only seen two cases
+               three_new_para=cumu_para == 3 ## I have only seen three cases
+               ) %>%
+        select(sim, t, no_new_para, one_new_para,two_new_para, three_new_para)
+    ## Find total paralysis cases by end date
+    traj_cumu_para <- trajectories %>% 
+        group_by(sim) %>% mutate(para=cumsum(para)) %>% 
+        filter(t == max_date) %>%
+        select(sim, para) %>%
+        rename(total_para=para)
+    tmp <- flag_traj %>% left_join(traj_cumu_para)
     
-tmp <- flag_traj %>% left_join(traj_cumu_para)
-
-
-omg1 <- tmp %>% group_by(sim) %>% filter(no_new_para == TRUE) %>%
-    filter(t == max(t)) %>%
-    mutate(last_date_no_cases = t) %>%
-    select(sim, last_date_no_cases,total_para)
-
-omg2 <- tmp %>% group_by(sim) %>% filter(one_new_para == TRUE) %>%
-    filter(t == max(t)) %>%
-    mutate(last_date_one_case = t) %>%
-    select(sim, last_date_one_case,total_para)
-
-omg3 <- tmp %>% group_by(sim) %>% filter(two_new_para == TRUE) %>%
-    filter(t == max(t)) %>%
-    mutate(last_date_two_cases = t) %>%
-    select(sim, last_date_two_cases,total_para)
-
-omg4 <- tmp %>% group_by(sim) %>% filter(three_new_para == TRUE) %>%
-    filter(t == max(t)) %>%
-    mutate(last_date_three_cases = t) %>%
-    select(sim, last_date_three_cases,total_para)
-
-tmp_all <- omg1 %>% left_join(omg2) %>% left_join(omg3) %>% left_join(omg4) %>% ungroup()
-
-dates <- seq(as.Date("2022-08-20"),as.Date(max_date),by="1 day")
-
-ns <- numeric(length(dates))
-subset_flags1 <- tmp_all
-subset_flags2 <- tmp_all
-subset_flags3 <- tmp_all
-subset_flags4 <- tmp_all
-
-all_no_para <- NULL
-all_one_para <- NULL
-all_two_para <- NULL
-all_three_para <- NULL
-quantile_lower <- 0.1
-quantile_upper <- 0.9
-for(i in seq_along(dates)){
-    print(i)
-    subset_flags1 <- subset_flags1 %>% filter(
-        !is.na(last_date_no_cases) &
-        last_date_no_cases >= dates[i])
-    subset_flags2 <- subset_flags2 %>% filter(
-        !is.na(last_date_one_case) &last_date_one_case >= dates[i])
-    subset_flags3 <- subset_flags3 %>% filter(
-        !is.na(last_date_two_cases) &last_date_two_cases >= dates[i])
-    subset_flags4 <- subset_flags4 %>% filter(
-        !is.na(last_date_three_cases) &last_date_three_cases >= dates[i])
-    ns[i] <- nrow(subset_flags1)
-    all_no_para[[i]] <- subset_flags1 %>% 
-        dplyr::summarize(median_para=median(total_para),
-                         mean_para=mean(total_para),
-                         lower=quantile(total_para,quantile_lower),
-                  upper=quantile(total_para,quantile_upper)) %>%
-        mutate(model="0", t =dates[i])
+    ## Flag last date with no new paralysis
+    omg1 <- tmp %>% group_by(sim) %>% filter(no_new_para == TRUE) %>%
+        filter(t == max(t)) %>%
+        mutate(last_date_no_cases = t) %>%
+        select(sim, last_date_no_cases,total_para)
     
-    all_one_para[[i]] <- subset_flags2 %>% 
-        dplyr::summarize(median_para=median(total_para),
-                         mean_para=mean(total_para),
-                         lower=quantile(total_para,quantile_lower),
-                  upper=quantile(total_para,quantile_upper)) %>%
-        mutate(model="1", t =dates[i])
+    ## Flag last date where we only had one cumulative case of paralysis
+    omg2 <- tmp %>% group_by(sim) %>% filter(one_new_para == TRUE) %>%
+        filter(t == max(t)) %>%
+        mutate(last_date_one_case = t) %>%
+        select(sim, last_date_one_case,total_para)
+    ## Flag last date where we only had two cumulative cases of paralysis
+    omg3 <- tmp %>% group_by(sim) %>% filter(two_new_para == TRUE) %>%
+        filter(t == max(t)) %>%
+        mutate(last_date_two_cases = t) %>%
+        select(sim, last_date_two_cases,total_para)
+    ## Flag last date where we only had three cumulative cases of paralysis
+    omg4 <- tmp %>% group_by(sim) %>% filter(three_new_para == TRUE) %>%
+        filter(t == max(t)) %>%
+        mutate(last_date_three_cases = t) %>%
+        select(sim, last_date_three_cases,total_para)
     
-    all_two_para[[i]] <- subset_flags3 %>% 
-        dplyr::summarize(median_para=median(total_para),
-                         mean_para=mean(total_para),
-                         lower=quantile(total_para,quantile_lower),
-                  upper=quantile(total_para,quantile_upper)) %>%
-        mutate(model="2", t =dates[i])
-    
-    all_three_para[[i]] <- subset_flags4 %>% 
-        dplyr::summarize(median_para=median(total_para),
-                         mean_para=mean(total_para),
-                         lower=quantile(total_para,quantile_lower),
-                  upper=quantile(total_para,quantile_upper)) %>%
-        mutate(model="3", t =dates[i])
-    
+    tmp_all <- omg1 %>% left_join(omg2) %>% left_join(omg3) %>% left_join(omg4) %>% ungroup()
+    tmp_all
 }
-all_no_para <- do.call("bind_rows",all_no_para)
-all_one_para <- do.call("bind_rows",all_one_para)
-all_two_para <- do.call("bind_rows",all_two_para)
-all_three_para <- do.call("bind_rows",all_three_para)
+tmp_all <- get_flag_traj(trajectories)
+tmp_all_nyc <- get_flag_traj(traj_nyc)
 
-tmp_comb <- bind_rows(all_no_para,all_one_para, all_two_para, all_three_para)
+filter_traj_by_cumu_para <- function(tmp_traj, quantile_lower=0.1,quantile_upper=0.9){
+    dates <- seq(as.Date("2022-08-20"),as.Date(max_date),by="1 day")
+    
+    ns <- numeric(length(dates))
+    subset_flags1 <- tmp_traj
+    subset_flags2 <- tmp_traj
+    subset_flags3 <- tmp_traj
+    subset_flags4 <- tmp_traj
+    
+    all_no_para <- NULL
+    all_one_para <- NULL
+    all_two_para <- NULL
+    all_three_para <- NULL
+    
+    ## Go through each date and filter only trajectories which 
+    for(i in seq_along(dates)){
+        print(i)
+        ## Filter only trajectories whose last date of "no cases" is today or later
+        subset_flags1 <- subset_flags1 %>% filter(
+            !is.na(last_date_no_cases) &
+                last_date_no_cases >= dates[i])
+        ## Filter only trajectories whose last date of "only one case" is today or later, 
+        ## AND they are after their last date of no cases, etc..
+        subset_flags2 <- subset_flags2 %>% filter(
+            !is.na(last_date_one_case) &last_date_one_case >= dates[i] & last_date_no_cases < dates[i])
+        subset_flags3 <- subset_flags3 %>% filter(
+            !is.na(last_date_two_cases) &last_date_two_cases >= dates[i] & last_date_one_case < dates[i])
+        subset_flags4 <- subset_flags4 %>% filter(
+            !is.na(last_date_three_cases) &last_date_three_cases >= dates[i] & last_date_two_cases < dates[i])
+        
+        ns[i] <- nrow(subset_flags1)
+        all_no_para[[i]] <- subset_flags1 %>% 
+            dplyr::summarize(median_para=median(total_para),
+                             mean_para=mean(total_para),
+                             lower=quantile(total_para,quantile_lower),
+                             upper=quantile(total_para,quantile_upper)) %>%
+            mutate(model="0", t =dates[i])
+        
+        all_one_para[[i]] <- subset_flags2 %>% 
+            dplyr::summarize(median_para=median(total_para),
+                             mean_para=mean(total_para),
+                             lower=quantile(total_para,quantile_lower),
+                             upper=quantile(total_para,quantile_upper)) %>%
+            mutate(model="1", t =dates[i])
+        
+        all_two_para[[i]] <- subset_flags3 %>% 
+            dplyr::summarize(median_para=median(total_para),
+                             mean_para=mean(total_para),
+                             lower=quantile(total_para,quantile_lower),
+                             upper=quantile(total_para,quantile_upper)) %>%
+            mutate(model="2", t =dates[i])
+        
+        all_three_para[[i]] <- subset_flags4 %>% 
+            dplyr::summarize(median_para=median(total_para),
+                             mean_para=mean(total_para),
+                             lower=quantile(total_para,quantile_lower),
+                             upper=quantile(total_para,quantile_upper)) %>%
+            mutate(model="3", t =dates[i])
+        
+    }
+    all_no_para <- do.call("bind_rows",all_no_para)
+    all_one_para <- do.call("bind_rows",all_one_para)
+    all_two_para <- do.call("bind_rows",all_two_para)
+    all_three_para <- do.call("bind_rows",all_three_para)
+    
+    tmp_comb <- bind_rows(all_no_para,all_one_para, all_two_para, all_three_para)
+    tmp_comb
+}
+
+
 fig2A <- tmp_comb %>%
     mutate(model = as.factor(model)) %>%
     mutate(model=paste0("Further paralysis cases observed: ", model)) %>%

@@ -3,6 +3,7 @@ library(Hmisc)
 library(ggplot2)
 library(patchwork)
 library(dplyr)
+library(tidyr)
 library(paletteer)
 setwd("~/Documents/GitHub/paralytic_polio_estimates/")
 source("simulation_functions_twoimmune.R")
@@ -140,6 +141,33 @@ traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
 
 
 traj_summary <- bind_rows(traj_summary1,traj_summary2,traj_summary3)
+
+## Plot some trajectories
+sub_sims <- sample(unique(trajectories$sim),25)
+p_traj <- trajectories %>% filter(sim %in% sub_sims) %>% 
+    filter(t <= as.Date("2022-08-26")) %>%
+    ggplot() +
+    geom_line(aes(x=t,y=inc,group=sim),size=0.25,color="grey40") +
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
+                                 xend=as.Date(c("2022-06-22","2022-08-20")),y=0,yend=6000),
+                 aes(x=x,xend=xend,y=y,yend=yend),
+                 linetype="dashed") +    
+    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
+                              y=6250,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),size=2.5) +
+    ylab("Incidence of polio infections")+
+    xlab("Date") +
+    scale_x_date(date_labels="%b",breaks="month") +
+    scale_y_continuous(limits=c(0,6500),expand=c(0,0),breaks=seq(0,6000,by=1000)) +
+    theme_classic() +
+    scale_fill_nejm() +
+    scale_color_nejm() +
+    theme(axis.text=element_text(size=6),
+          axis.title=element_text(size=8),
+          legend.text=element_text(size=6),
+          legend.title=element_text(size=6),
+          panel.grid.major = element_line(size=0.1,color="grey70")) +
+    labs(tag="A")
+
 p1 <- ggplot(traj_summary) + 
     geom_ribbon(aes(x=t,ymin=lower,ymax=upper,fill=model),alpha=0.25) +
     geom_line(aes(x=t,y=prop,col=model)) +
@@ -165,7 +193,7 @@ p1 <- ggplot(traj_summary) +
           legend.text=element_text(size=6),
           legend.title=element_text(size=6),
           panel.grid.major = element_line(size=0.1,color="grey70")) +
-    labs(tag="A")
+    labs(tag="B")
 
 p2 <- ggplot(traj_summary) + 
     geom_ribbon(aes(x=t,ymin=lower1,ymax=upper1,fill=model),alpha=0.25) +
@@ -186,7 +214,7 @@ linetype="dashed") +
           axis.title=element_text(size=8),
           legend.text=element_text(size=6),
           legend.title=element_text(size=6))+
-    labs(tag="C")
+    labs(tag="D")
 
 
 
@@ -196,7 +224,7 @@ p_final_size <- trajectories %>% group_by(sim) %>%
     filter(t == "2022-08-20") %>% 
     mutate(model = "Current data") %>%
     ggplot() + geom_histogram(aes(x=y,fill=model),binwidth=10000,
-                              color="black") +
+                              color="black",fill='grey70') +
     scale_x_continuous(breaks=seq(0,250000,by=100000))+
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
@@ -207,17 +235,33 @@ p_final_size <- trajectories %>% group_by(sim) %>%
           legend.text=element_text(size=6),
           legend.title=element_text(size=6)) +
     scale_fill_nejm()+
-    labs(tag="D")
+    labs(tag="E")
 
 p_re <- trajectories %>% 
     group_by(sim) %>%
     filter(t == min(t)) %>%
-    mutate(model = "Current data") %>%
-    ggplot() + geom_density(aes(x=Rt,fill=model),color="black",alpha=0.5) +
+    #mutate(model = "Current data") %>%
+    ggplot() + geom_density(aes(x=Rt),color="black",fill="grey70") +
     geom_vline(xintercept=1,linetype="dashed") +
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
     xlab("Initial effective reproductive number") + ylab("Density") +
+    theme(axis.text=element_text(size=6),
+          axis.title=element_text(size=8),
+          legend.position="none",
+          legend.text=element_text(size=6),
+          legend.title=element_text(size=6)) +
+    scale_fill_nejm() +
+    labs(tag="C")
+
+p_start <- trajectories %>% 
+    group_by(sim) %>%
+    filter(t == min(t)) %>%
+    mutate(model = "Current data") %>%
+    ggplot() + geom_density(aes(x=date_start,fill=model),color="black",fill="grey70") +
+    scale_y_continuous(expand=c(0,0)) +
+    theme_classic() +
+    xlab("Seed date") + ylab("Density") +
     theme(axis.text=element_text(size=6),
           axis.title=element_text(size=8),
           legend.position="none",
@@ -469,11 +513,12 @@ trajectories %>% filter(t == as.Date(max_date)) %>%
 traj_summary %>% filter(t == as.Date("2022-08-20")) %>%
     mutate(prop=1-prop,lower=1-lower,upper=1-upper)
 
-
 ## Number of paralytic polio by 1st April if 1 further case by 1st Oct
 traj_summary %>% filter(t == max_date)
-
 
 ## Probability of not seeing any cases in NYC at all
 
 ## Number of paralysis in NYC if we see 1 case on or after 1st October by 1st April 2023
+
+
+

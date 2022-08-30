@@ -55,7 +55,6 @@ run_simulation_twoimmune <- function(
     infectiousness <- function(t){extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,rate=infect_rate)}
     infectiousness_ps <- function(t){extraDistr::ddgamma(t, rate=infect_partial_rate, shape=infect_partial_shape)}
     #infectiousness_ps <- function(t){dexp(t, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)}
-
     ## Initial number who are fully immune, partially immune and fully susceptible
     ini_pop <- rmultinom(1, P, prop_immune_groups)[,1]
 if(restart_simulation){
@@ -278,7 +277,7 @@ simulate_priors <- function(n=100,
                            
                            ){
     ## Incubation period
-    if(!incu_fix){
+    if(!incu_fix){ 
         incu_mean_scale <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[1]
         incu_mean_shape <- find_gamma_pars(incu_mean_prior_mean,incu_mean_prior_var)[2]
         

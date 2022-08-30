@@ -10,7 +10,7 @@ priors <- read_csv("pars/priors.csv")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 1000
+nsims <- 10000
 #nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))

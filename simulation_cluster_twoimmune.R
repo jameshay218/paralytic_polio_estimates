@@ -3,8 +3,8 @@ library(tidyr)
 library(tidyverse)
 library(lubridate)
 
-setwd("~/paralytic_polio_estimates")
-#setwd("~/Documents/GitHub/paralytic_polio_estimates")
+#setwd("~/paralytic_polio_estimates")
+setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
 priors <- read_csv("pars/priors.csv")
 
@@ -14,7 +14,7 @@ nsims <- 30000
 #nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
-#i <- 1
+#i <- 2
 print(i)
 set.seed(i)
 
@@ -178,7 +178,7 @@ for(j in 1:nrow(pars)){
     infect_shape_par1 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par1)
     infect_shape_par2 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par2)
     
-    infect_shape_nyc <- rnorm(1, infect_shape_par1, infect_shape_par2)
+    infect_shape_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_par1, sd=infect_shape_par2)
     
     ## Sample generation interval parameters for partially immune
     infect_rate_ps_par1 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1)
@@ -189,7 +189,7 @@ for(j in 1:nrow(pars)){
     infect_shape_ps_par1 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par1)
     infect_shape_ps_par2 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par2)
     
-    infect_shape_ps_nyc <- rnorm(1, infect_shape_ps_par1, infect_shape_ps_par2)
+    infect_shape_ps_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_ps_par1, sd=infect_shape_ps_par2)
     
     ## Sample relative infectiousness
     rel_infect_par1 <- tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1)

@@ -149,7 +149,7 @@ if(restart_simulation){
             #inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
             
             inc <- inc_s + inc_ps
-           
+           #if(is.na(inc)) browser()
             Rt[t] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + 
                 R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
             
@@ -302,8 +302,8 @@ simulate_priors <- function(n=100,
     incu_shape <- find_gamma_pars(incu_mean,incu_var)[[2]]
     
     ## Infectious period, fully susceptible
-    infect_shape <- rnorm(n, gen_interval_susc_shape_par1,
-                          gen_interval_susc_shape_par2)
+    infect_shape <- truncnorm::rtruncnorm(n, a=0,mean=gen_interval_susc_shape_par1,
+                          sd=gen_interval_susc_shape_par2)
     infect_rate <- rbeta(n, gen_interval_susc_rate_par1,
                          gen_interval_susc_rate_par2)
     
@@ -311,8 +311,8 @@ simulate_priors <- function(n=100,
     infect_var <- infect_shape / (infect_rate*infect_rate)
     
     ## Infectious period, partially susceptible
-    infect_partial_shape <- rnorm(n, gen_interval_partial_shape_par1,
-                          gen_interval_partial_shape_par2)
+    infect_partial_shape <- truncnorm::rtruncnorm(n, a=0,mean=gen_interval_partial_shape_par1,
+                          sd=gen_interval_partial_shape_par2)
     infect_partial_rate <- rbeta(n, gen_interval_partial_rate_par1,
                          gen_interval_partial_rate_par2)
     

@@ -3,8 +3,8 @@ library(tidyr)
 library(tidyverse)
 library(lubridate)
 
-#setwd("~/paralytic_polio_estimates")
-setwd("~/Documents/GitHub/paralytic_polio_estimates")
+setwd("~/paralytic_polio_estimates")
+#setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
 priors <- read_csv("pars/priors.csv")
 

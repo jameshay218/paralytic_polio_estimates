@@ -137,32 +137,33 @@ if(restart_simulation){
             tmp_infectiousness_s <- R0*infectiousness((t - min_t:t))
             tmp_infectiousness_ps <- rel_R0*R0*infectiousness_ps((t-min_t:t))
             
-            
             ## Number of new infections arising from previously susceptible and partially immune groups
-            inc_s <- sum(sapply(seq_along(min_t:t), function(x) sum(rpois(1, use_infections_s[x]*tmp_infectiousness_s[x]))))
-            inc_ps <- sum(sapply(seq_along(min_t:t), function(x) sum(rpois(1, use_infections_ps[x]*tmp_infectiousness_ps[x]))))
-            
+            inc_s <- sum(sapply(seq_along(min_t:t), 
+                                function(x) sum(rpois(1, use_infections_s[x]*tmp_infectiousness_s[x]))))
+            inc_ps <- sum(sapply(seq_along(min_t:t), 
+                                 function(x) sum(rpois(1, use_infections_ps[x]*tmp_infectiousness_ps[x]))))
             
             ## Get number of contacts with susceptible/immune individuals
             #inc_s <- rbinom(1,fully_susceptible[t-1],prob=(1-exp(-(inc/P))))
+            #inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
             
             inc <- inc_s + inc_ps
-            new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
-            inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
-            inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
-            
-            #inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
-            #if(inc > 25) browser()
-            Rt[t] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
+           
+            Rt[t] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + 
+                R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
             
             Rt[t] <- Rt[t] * (fully_susceptible[t-1]+partially_susceptible[t-1])/P
             
-            ## Update susceptible pool
-            fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
-            partially_susceptible[t] <- partially_susceptible[t-1] - inc_ps
-            
             ## If we simulated an infection
             if(inc >= 1){
+                new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
+                inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
+                inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
+                
+                ## Update susceptible pool
+                fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
+                partially_susceptible[t] <- partially_susceptible[t-1] - inc_ps
+                
                 ## Set infection states of new infections and record time of infection
                 new_infections_s[t] <- new_infections_s[t] + inc_s
                 new_infections_ps[t] <- new_infections_ps[t] + inc_ps

@@ -784,3 +784,20 @@ p_prior_intervals <-ggplot(dists_summary) +
 
 ggsave(filename = "figures/prior_intervals.pdf",p_prior_intervals,height=3,width=8)
 ggsave(filename = "figures/prior_intervals.png",p_prior_intervals,height=3,width=8,units="in",dpi=300)
+
+get_beta_meanvar <- function(a,b){
+    c(a/(a+b), (a*b)/((a+b)^2 * (a+b+1)))
+}
+priors1 <- cbind(priors, t(apply(priors, 1, function(x){
+    x1 <- as.numeric(x)
+    if(x[3] == "beta"){
+        print(signif(get_beta_meanvar(x1[4], x1[5])),3)
+    } else if(x[3] == "gamma") {
+        print(signif(get_gamma_meanvar(x1[4], x1[5])))
+    } else {
+        print(signif(c(x1[4], x1[5])))
+    }
+})))
+colnames(priors1)[6:7] <- c("mean","var")
+priors1 %>% filter(scenario == "rockland_high_coverage") %>% select(`model parameter`, mean, var)
+priors1 %>% filter(scenario == "NYC") %>% select(`model parameter`, mean, var)

@@ -23,7 +23,7 @@ reload <- FALSE
 if(reload){
     setwd("sims/")
     all_res <-  NULL
-    for(i in 1:1000){
+    for(i in 1:500){
         if(file.exists(paste0("simulation_",i,".RData"))){
             load(paste0("simulation_",i,".RData"))
             all_res[[i]] <- pars
@@ -35,7 +35,7 @@ if(reload){
     
     setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_traj/")
     all_traj <-  NULL
-    for(i in 1:1000){
+    for(i in 1:500){
         if(file.exists(paste0("traj_",i,".RData"))){
             load(paste0("traj_",i,".RData"))
             all_traj[[i]] <- res2
@@ -45,7 +45,7 @@ if(reload){
     
     setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_nyc/")
     all_nyc <-  NULL
-    for(i in 1:1000){
+    for(i in 1:500){
         if(file.exists(paste0("nyc_",i,".RData"))){
             load(paste0("nyc_",i,".RData"))
             all_nyc[[i]] <- nyc
@@ -598,3 +598,189 @@ traj_nyc %>% group_by(sim) %>% summarize(total_para = sum(para)) %>%
 tmp_comb_nyc %>% filter(t == "2022-10-01")
 
 
+## Supplementary figures
+priors <- read_csv("~/Documents/GitHub/paralytic_polio_estimates/pars/priors.csv")
+scenarios <- c("rockland_high_coverage","rockland_low_coverage")
+tmp_pars <- priors %>% filter(scenario == scenarios[1])
+prior_draws <- simulate_priors(10000,incu_mean_prior_mean=14,
+                               incu_mean_prior_var=3,
+                               incu_var_prior_mean=15,
+                               incu_var_prior_var=1,
+                               gen_interval_susc_shape_par1=tmp_pars %>% 
+                                   filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par1),
+                               gen_interval_susc_shape_par2=tmp_pars %>% 
+                                   filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par2),
+                               gen_interval_susc_rate_par1=tmp_pars %>% 
+                                   filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par1),
+                               gen_interval_susc_rate_par2=tmp_pars %>% 
+                                   filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par2),
+                               gen_interval_partial_shape_par1=tmp_pars %>% 
+                                   filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par1),
+                               gen_interval_partial_shape_par2=tmp_pars %>% 
+                                   filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par2),
+                               gen_interval_partial_rate_par1=tmp_pars %>% 
+                                   filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1),
+                               gen_interval_partial_rate_par2=tmp_pars %>% 
+                                   filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2),
+                               prob_paralysis_mean=0.0005,
+                               prob_paralysis_ps_par1 = -4,
+                               prob_paralysis_ps_par2 = -1,
+                               prob_paralysis_var = 2e-8,
+                               R0_dist="truncnorm",
+                               R0_par1=4.9,R0_par2=2,
+                               rel_R0_par1=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1),
+                               rel_R0_par2=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par2),
+                               prop_susceptible_par1 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par1),
+                               prop_susceptible_par2 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par2),
+                               prop_refractory_par1 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par1),
+                               prop_refractory_par2 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par2)
+)
+colnames(prior_draws)
+
+
+prior_key <- c("R0"="R[0]", 
+               "Re"="R[e]",
+               "rel_R0s"="φ", 
+               "rel_R0"="φ", 
+               "infect_mean"="g[S]^μ", 
+               "infect_var"="g[S]^σ", 
+               "infectious_period_var"="g[S]^σ",
+               "infectious_period_mean"="g[S]^μ",
+               "infectious_period_mean_ps"="f[PS]^μ",
+               "infectious_period_var_ps"="f[PS]^σ",
+               "infect_partial_mean"="f[PS]^μ", 
+               "infect_partial_var"="f[PS]^σ", 
+               "incu_mean"="γ^μ",
+               "incu_var"="γ^σ",
+               "prob_paralysis_s"="α[S]", 
+               "prob_paralysis_ps"="α[PS]", 
+               "prop_immune_groups.1"="π[R]", 
+               "prop_immune_groups.2"="π[PS]", 
+               "prop_immune_groups.3"="π[S]")
+
+prior_draws <- prior_draws %>% mutate(Re = (prop_immune_groups.3 + prop_immune_groups.2) * (R0 * (prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2)) + R0*rel_R0s*(prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2))))
+prior_draws <- prior_draws %>% 
+    mutate(prob_paralysis_ps = (1-prob_paralysis_ps)*prob_paralysis_s)
+
+
+prior_draws<- prior_draws%>%mutate("incu_mean"=incu_scale*incu_shape,"incu_var"=incu_shape*incu_scale*incu_scale)
+
+
+prior_draws_long <-prior_draws %>% mutate(i=1:n()) %>% pivot_longer(-i) %>%
+    filter(value<= 100)
+
+prior_draws_long <- prior_draws_long %>% filter(name %in% names(prior_key))
+prior_draws_long$Parameter = prior_key[prior_draws_long$name]
+
+
+
+res <-res%>% mutate(Re = (prop_immune_groups.3 + prop_immune_groups.2) * (R0 * (prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2)) + R0*rel_R0*(prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2))))
+res <- res %>% mutate(incu_mean=incu_shape*incu_scale,incu_var=incu_shape*incu_scale*incu_scale)
+
+res1 <- res[,colnames(res) %in% c("sim",names(prior_key))]
+res1 <- res1 %>% mutate(prob_paralysis_ps = (1-prob_paralysis_ps)*prob_paralysis_s)
+res1 <- res1 %>% pivot_longer(-sim)
+res1 <- res1 %>% filter(value < 100)
+res1$Parameter <- prior_key[res1$name]
+
+all_draws <- bind_rows(prior_draws_long %>% mutate(Distribution="Prior"), 
+                       res1 %>% mutate(Distribution="Post-filter"))
+
+all_draws <- all_draws %>% filter(name != "prob_paralysis_ps" | (name == "prob_paralysis_ps" & value < 1e3))
+
+p_prior <- ggplot(all_draws) + 
+    geom_density(aes(x=value,fill=Distribution),alpha=0.25) +
+    geom_vline(data=data.frame(Parameter=c("R[0]","R[e]"),xintercept=1),aes(xintercept=xintercept),linetype="dashed",col="red")+
+    facet_wrap(~Parameter,scales="free",labeller=label_parsed,ncol=3) +
+    theme_classic() +
+    theme(strip.background = element_blank(),
+          legend.position=c(0.8,0.1)) +
+    scale_fill_manual(values=c("Post-filter"=nejm_palette[3],"Prior"="grey40"))+
+    xlab("Value") +
+    ylab("Density")
+
+ggsave(filename = "figures/prior_distributions.pdf",p_prior,height=8,width=8)
+ggsave(filename = "figures/prior_distributions.png",p_prior,height=8,width=8,units="in",dpi=300)
+
+
+
+## Get post-filter and prior draws for generation interval dist and incubation period dist
+## Generation interval plots
+incubation_period <- function(t, incu_scale, incu_shape, max_incu_period=50){
+    extraDistr::ddgamma(t,scale=incu_scale,shape=incu_shape)/extraDistr::pdgamma(max_incu_period,scale=incu_scale,shape=incu_shape)
+}
+infectiousness <- function(t,infect_rate,infect_shape,max_infectious_period=50){
+    extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,rate=infect_rate)
+}
+
+
+ts <- 0:25
+tmp_samp <- sample(1:nrow(prior_draws),1000)
+res1 <- prior_draws[tmp_samp,]
+res2 <- res[tmp_samp,]
+incu_periods_prior <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_prior <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_ps_prior <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+incu_periods_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+infectiousness_ps_dat <- matrix(0,nrow=nrow(res1),ncol=length(ts))
+for(x in 1:nrow(res1)){
+    ## Priors
+    incu_periods_prior[x,] <- incubation_period(ts, res1$incu_scale[x],res1$incu_shape[x])
+    infectiousness_prior[x,] <- infectiousness(ts, infect_rate=res1$infect_rate[x],infect_shape=res1$infect_shape[x])
+    infectiousness_ps_prior[x,] <- infectiousness(ts, infect_rate=res1$infect_partial_rate[x],infect_shape=res1$infect_partial_shape[x])
+    
+    ## Post filter
+    incu_periods_dat[x,] <- incubation_period(ts, res2$incu_scale[x],res2$incu_shape[x])
+    infectiousness_dat[x,] <- infectiousness(ts, infect_rate=res2$infect_rate[x],infect_shape=res2$infect_shape[x])
+    infectiousness_ps_dat[x,] <- infectiousness(ts, infect_rate=res2$infect_partial_rate[x],infect_shape=res2$infect_partial_shape[x])
+}
+incu_periods_dat <- reshape2::melt(incu_periods_dat)
+colnames(incu_periods_dat) <- c("sim","time_since_infection","probability")
+incu_periods_dat$model <- "Paralysis incubation period"
+infectiousness_dat <- reshape2::melt(infectiousness_dat)
+colnames(infectiousness_dat) <- c("sim","time_since_infection","probability")
+infectiousness_dat$model <- "Fully susceptible\ngeneration interval"
+infectiousness_ps_dat <- reshape2::melt(infectiousness_ps_dat)
+colnames(infectiousness_ps_dat) <- c("sim","time_since_infection","probability")
+infectiousness_ps_dat$model <- "Partially susceptible\ngeneration interval"
+
+dists <- bind_rows(incu_periods_dat,infectiousness_dat,infectiousness_ps_dat)
+
+incu_periods_prior <- reshape2::melt(incu_periods_prior)
+colnames(incu_periods_prior) <- c("sim","time_since_infection","probability")
+incu_periods_prior$model <- "Paralysis incubation period"
+infectiousness_prior <- reshape2::melt(infectiousness_prior)
+colnames(infectiousness_prior) <- c("sim","time_since_infection","probability")
+infectiousness_prior$model <- "Fully susceptible\ngeneration interval"
+infectiousness_ps_prior <- reshape2::melt(infectiousness_ps_prior)
+colnames(infectiousness_ps_prior) <- c("sim","time_since_infection","probability")
+infectiousness_ps_prior$model <- "Partially susceptible\ngeneration interval"
+
+dists_prior <- bind_rows(incu_periods_prior,infectiousness_prior,infectiousness_ps_prior)
+
+dists_all<- bind_rows(dists%>%mutate(Distribution="Post-filter"),
+                      dists_prior %>% mutate(Distribution="Prior"))
+dists_summary <- dists_all %>% group_by(Distribution,model, time_since_infection) %>%
+    summarize(mean_p=mean(probability),lower_90=quantile(probability,0.1),
+              upper_90=quantile(probability,0.9))
+
+
+p_prior_intervals <-ggplot(dists_summary) + 
+    #geom_line(aes(x=time_since_infection,y=probability,group=sim),alpha=0.1) +
+    geom_ribbon(aes(x=time_since_infection,ymin=lower_90,ymax=upper_90,
+                    fill=Distribution),alpha=0.25) +
+    geom_line(aes(x=time_since_infection,y=mean_p,color=Distribution)) +
+    geom_point(aes(x=time_since_infection,y=mean_p,color=Distribution)) +
+    facet_wrap(~model,scales="free_y",ncol=3) +
+    scale_x_continuous(breaks=seq(0,25,by=5))+
+    theme_classic() +
+    theme(strip.background = element_blank(),
+          legend.position="bottom") +
+    scale_fill_manual(values=c("Post-filter"=nejm_palette[3],"Prior"="grey40"))+
+    scale_color_manual(values=c("Post-filter"=nejm_palette[3],"Prior"="grey40"))+
+    xlab("Days since infection") +
+    ylab("Probability mass")
+
+ggsave(filename = "figures/prior_intervals.pdf",p_prior_intervals,height=3,width=8)
+ggsave(filename = "figures/prior_intervals.png",p_prior_intervals,height=3,width=8,units="in",dpi=300)

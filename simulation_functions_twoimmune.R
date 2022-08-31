@@ -144,9 +144,14 @@ if(restart_simulation){
             
             
             ## Get number of contacts with susceptible/immune individuals
+            #inc_s <- rbinom(1,fully_susceptible[t-1],prob=(1-exp(-(inc/P))))
+            
             inc <- inc_s + inc_ps
-            inc_s <- rbinom(1,fully_susceptible[t-1],prob=(1-exp(-(inc/P))))
-            inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
+            new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
+            inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
+            inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
+            
+            #inc_ps <- rbinom(1,partially_susceptible[t-1],prob=(1-exp(-(inc/P))))
             #if(inc > 25) browser()
             Rt[t] <- R0 * prop_immune_groups[3]/sum(prop_immune_groups[2:3]) + R0*rel_R0*  prop_immune_groups[2]/sum(prop_immune_groups[2:3])
             

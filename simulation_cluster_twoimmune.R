@@ -10,7 +10,7 @@ priors <- read_csv("pars/priors.csv")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 10000
+nsims <- 30000
 #nsims <- 1000
 
 i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
@@ -47,7 +47,7 @@ for(index in 1:2){
                                        filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1),
                                    gen_interval_partial_rate_par2=tmp_pars %>% 
                                        filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2),
-                                   tmax=180, P=325000,
+                                   tmax=180, P=340000,
                                    prob_paralysis_mean=0.0005,
                                    prob_paralysis_ps_par1 = -4,
                                    prob_paralysis_ps_par2 = -1,
@@ -154,7 +154,7 @@ for(index in 1:2){
                                   final_conditions = res$final_conditions,
                                   t_starts=res$tmax_vector,
                                   vaccinate_proportion = vacc_strats,
-                                  P=325000,
+                                  P=340000,
                                   tmax=500,nruns=1)
         if(!dir.exists(paste0(save_wds[index],"_traj/"))) dir.create(paste0(save_wds[index],"_traj/"))
         
@@ -213,7 +213,7 @@ for(j in 1:nrow(pars)){
     
     tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
                                     rel_R0=rel_infect_nyc,
-                                    P=8336817,
+                                    P=8500000,
                                     ini_infs=rep(1,14),
                                     observed_data=NULL,
                                     continue_run=TRUE,

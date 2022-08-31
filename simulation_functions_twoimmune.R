@@ -163,15 +163,20 @@ if(restart_simulation){
                 ## Ensure we don't simulate more infections than there are people to be infected
                 inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
                 inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
+            } else {
+                inc_s <- 0
+                inc_ps <- 0
+            }
+            ## Update susceptible pool
+            fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
+            partially_susceptible[t] <- partially_susceptible[t-1] - inc_ps
+            
+            ## Set infection states of new infections and record time of infection
+            new_infections_s[t] <- new_infections_s[t] + inc_s
+            new_infections_ps[t] <- new_infections_ps[t] + inc_ps
                 
-                ## Update susceptible pool
-                fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
-                partially_susceptible[t] <- partially_susceptible[t-1] - inc_ps
-                
-                ## Set infection states of new infections and record time of infection
-                new_infections_s[t] <- new_infections_s[t] + inc_s
-                new_infections_ps[t] <- new_infections_ps[t] + inc_ps
-                
+            ## If we simulated an infection in S or PS
+            if((inc_s + inc_ps) > 1){
                 ## Simulate paralysis cases from these new infections
                 paralysis_cases_s <- rbinom(1, inc_s, prob_paralysis_s)
                 paralysis_cases_ps <- rbinom(1, inc_ps, (1.0-prob_paralysis_ps)*prob_paralysis_s)

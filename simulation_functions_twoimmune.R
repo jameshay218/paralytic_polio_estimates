@@ -155,18 +155,13 @@ if(restart_simulation){
             
             Rt[t] <- Rt[t] * (fully_susceptible[t-1]+partially_susceptible[t-1])/P
             
-            ## If we simulated an infection
-            if(inc >= 1){
-                ## Allocate infections to the 3 immune classes
-                new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
-                
-                ## Ensure we don't simulate more infections than there are people to be infected
-                inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
-                inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
-            } else {
-                inc_s <- 0
-                inc_ps <- 0
-            }
+            ## Allocate infections to the 3 immune classes
+            new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
+            
+            ## Ensure we don't simulate more infections than there are people to be infected
+            inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
+            inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
+
             ## Update susceptible pool
             fully_susceptible[t] <- fully_susceptible[t-1] - inc_s
             partially_susceptible[t] <- partially_susceptible[t-1] - inc_ps

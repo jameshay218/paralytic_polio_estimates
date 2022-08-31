@@ -55,6 +55,7 @@ run_simulation_twoimmune <- function(
     infectiousness <- function(t){extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,rate=infect_rate)}
     infectiousness_ps <- function(t){extraDistr::ddgamma(t, rate=infect_partial_rate, shape=infect_partial_shape)}
     #infectiousness_ps <- function(t){dexp(t, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)}
+    
     ## Initial number who are fully immune, partially immune and fully susceptible
     ini_pop <- rmultinom(1, P, prop_immune_groups)[,1]
 if(restart_simulation){
@@ -156,7 +157,10 @@ if(restart_simulation){
             
             ## If we simulated an infection
             if(inc >= 1){
+                ## Allocate infections to the 3 immune classes
                 new_inc <- rmultinom(1, inc, prob=c(P-fully_susceptible[t-1]-partially_susceptible[t-1],partially_susceptible[t-1],fully_susceptible[t-1])/P)
+                
+                ## Ensure we don't simulate more infections than there are people to be infected
                 inc_s <- min(new_inc[3,1], fully_susceptible[t-1])
                 inc_ps <- min(new_inc[2,1], partially_susceptible[t-1])
                 
@@ -171,8 +175,7 @@ if(restart_simulation){
                 ## Simulate paralysis cases from these new infections
                 paralysis_cases_s <- rbinom(1, inc_s, prob_paralysis_s)
                 paralysis_cases_ps <- rbinom(1, inc_ps, (1.0-prob_paralysis_ps)*prob_paralysis_s)
-                #paralysis_cases_ps <- rbinom(1, inc_ps, prob_paralysis_ps)
-                #print(prob_paralysis_ps)
+                
                 total_paralysis_cases <- total_paralysis_cases + paralysis_cases_s + paralysis_cases_ps
                 
                 new_paralysis <- paralysis_cases_s + paralysis_cases_ps
@@ -213,8 +216,6 @@ if(restart_simulation){
             
             data_are_consistent <- isTRUE(all.equal(paralysis_incidence_s[first_paralysis:t]+paralysis_incidence_ps[first_paralysis:t],
                                                     observed_data[1:(1+t_elapsed)]))
-
-            #if(!data_are_consistent) print("BROKEN")
         }
         t <- t + 1
     }

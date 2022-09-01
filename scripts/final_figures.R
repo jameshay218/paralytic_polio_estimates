@@ -285,7 +285,7 @@ p1 <- ggplot(traj_summary) +
                                  xend=as.Date(c("2022-06-22","2022-08-20")),
                                  y=0,yend=1),
                  aes(x=x,xend=xend,y=y,yend=yend),
-               linetype="dashed") +    ylab("Probability epidemic is extinct\n (no cases in previous 7 days)")+
+               linetype="dashed") +    ylab("Probability epidemic is ongoing\n (continued cases in previous 7 days)")+
     theme_classic() +
     scale_fill_manual(values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
                                "Further cases reported\n by October 1st"=nejm_palette[1])) +
@@ -539,12 +539,6 @@ trajectories %>% filter(t == "2022-08-20") %>%
     mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
     mutate(prop = (prop)*100)
 
-trajectories %>% filter(t == "2022-08-20") %>%
-    filter(`Consistent with further\nparalytic polio\n cases by 2022-10-21` == "No" ) %>%
-    group_by(ongoing_7) %>% tally() %>%
-    pivot_wider(values_from=n,names_from=ongoing_7) %>%
-    mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
-    mutate(prop = (prop)*100)
 
 ## Effective reproduction number at seeding
 trajectories %>% group_by(sim) %>%

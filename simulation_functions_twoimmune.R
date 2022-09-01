@@ -51,7 +51,7 @@ run_simulation_twoimmune <- function(
                             ## and partially_immune -> fully immune
                             vaccinate_proportion=NULL
                             ){
-    incubation_period <- function(n){pmax(extraDistr::rdgamma(n,scale=incu_scale,shape=incu_shape),max_incu_period)}
+    incubation_period <- function(n){pmin(extraDistr::rdgamma(n,scale=incu_scale,shape=incu_shape),max_incu_period)}
     infectiousness <- function(t){extraDistr::ddgamma(t, rate=infect_rate, shape=infect_shape)/extraDistr::pdgamma(max_infectious_period, shape=infect_shape,rate=infect_rate)}
     infectiousness_ps <- function(t){extraDistr::ddgamma(t, rate=infect_partial_rate, shape=infect_partial_shape)}
     #infectiousness_ps <- function(t){dexp(t, infect_ps_par)/pexp(max_infectious_period, infect_ps_par)}

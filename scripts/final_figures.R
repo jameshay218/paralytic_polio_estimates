@@ -9,19 +9,27 @@ library(tidyverse)
 library(paletteer)
 library(data.table)
 
-setwd("~/Documents/GitHub/paralytic_polio_estimates/")
+main_wd <- "~/Documents/GitHub/paralytic_polio_estimates/"
+setwd(main_wd)
 source("simulation_functions_twoimmune.R")
 max_date <- "2023-04-01"
 summarize <- dplyr::summarize
-setwd("~/Documents/GitHub/paralytic_polio_estimates/")
 
 scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
 reload <- FALSE
+low_coverage <- FALSE
+
+if(low_coverage) {
+    append_to_dir_path <- "_low_coverage"
+} else{
+    append_to_dir_path <- ""
+    
+}
 # Read in simulation runs and combine -------------------------------------
 if(reload){
-    setwd("sims/")
+    setwd(paste0(main_wd,"/sims",append_to_dir_path,"/"))
     all_res <-  NULL
     for(i in 1:500){
         if(file.exists(paste0("simulation_",i,".RData"))){
@@ -32,8 +40,7 @@ if(reload){
     res <- as_tibble(do.call("bind_rows",all_res))
     res <- res %>% select(-c(Rt, inc_s,inc_ps,para,para_s,para_ps))
     
-    
-    setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_traj/")
+    setwd(paste0(main_wd,"/sims",append_to_dir_path,"_traj/"))
     all_traj <-  NULL
     for(i in 1:500){
         if(file.exists(paste0("traj_",i,".RData"))){
@@ -43,7 +50,7 @@ if(reload){
     }
     traj <- as_tibble(do.call("bind_rows",all_traj))
     
-    setwd("~/Documents/GitHub/paralytic_polio_estimates/sims_nyc/")
+    setwd(paste0(main_wd, "/sims_nyc/"))
     all_nyc <-  NULL
     for(i in 1:500){
         if(file.exists(paste0("nyc_",i,".RData"))){
@@ -83,13 +90,14 @@ if(reload){
     res <- res %>% filter(sim %in% subset_sims)
     
     
-    save(trajectories,file="../outputs/fitted_trajectories.RData")
-    save(traj_nyc,file="../outputs/nyc_trajectories.RData")
-    save(res,file="../outputs/filtered_parameters.RData")
+    save(trajectories,file=paste0(main_wd, "/outputs/fitted_trajectories",append_to_dir_path,".RData"))
+    save(traj_nyc,file=paste0(main_wd, "/outputs/nyc_trajectories",append_to_dir_path,".RData"))
+    save(res,file=paste0(main_wd, "/outputs/filtered_parameters",append_to_dir_path,".RData"))
+    setwd(main_wd)
 } else {
-    load("outputs/fitted_trajectories.RData")
-    load("outputs/nyc_trajectories.RData")
-    load("outputs/filtered_parameters.RData")
+    load(paste0("outputs/fitted_trajectories",append_to_dir_path,".RData"))
+    load(paste0("outputs/nyc_trajectories",append_to_dir_path,".RData"))
+    load(paste0("outputs/filtered_parameters",append_to_dir_path,".RData"))
 }
 
 # Clean trajectories ------------------------------------------------------
@@ -181,26 +189,26 @@ p_traj <- trajectories %>%
     filter(sim %in% c(sub_sims1,sub_sims2)) %>% 
     filter(t <= as.Date("2022-10-21")) %>%
     ggplot() +
-    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=6000),
+    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=8000),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill="black",alpha=0.1) +
     
-    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=4300,ymax=5300),
+    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=6300,ymax=7300),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=nejm_palette[6],alpha=0.25) +
     
     geom_line(aes(x=t,y=inc,group=sim),col=nejm_palette[3],size=0.25) +
     geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,5300,0),yend=c(4300,6000,6000)),
+                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,7300,0),yend=c(6300,8000,8000)),
                  aes(x=x,xend=xend,y=y,yend=yend),
                  linetype="dashed") +    
     geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=6350,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
+                              y=8350,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
               size=1.75) +
-    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=4750,lab="Positive wastewater samples\n from Rockland County"),
+    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=6750,lab="Positive wastewater samples\n from Rockland County"),
               aes(x=x,y=y,label=lab),size=1.75) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
     scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
-    scale_y_continuous(limits=c(0,6600),expand=c(0,0),breaks=seq(0,6000,by=1000)) +
+    scale_y_continuous(limits=c(0,8800),expand=c(0,0),breaks=seq(0,8000,by=1000)) +
     theme_classic() +
     scale_color_manual(values=c("Yes"=nejm_palette[1],"No"=nejm_palette[2])) +
     theme(axis.text=element_text(size=6),
@@ -503,17 +511,17 @@ fig2_rockland <- plot_fig2(tmp_comb)
 fig2_nyc <- plot_fig2(tmp_comb_nyc)
 
 
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.pdf", fig1, height=8,width=7)
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig1.png", fig1, height=8,width=7,units='in',dpi=300)
+ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".pdf"), fig1, height=8,width=7)
+ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".png"), fig1, height=8,width=7,units='in',dpi=300)
 
 fig2_main <- (fig2_rockland[[2]]+labs(tag="A") + ggtitle("Rockland County") + theme(plot.title=element_text(size=10)))/(fig2_nyc[[2]] + labs(tag="B")+ ggtitle("New York City")+ theme(plot.title=element_text(size=10)))
 fig2_alt <- (fig2_rockland[[1]]+labs(tag="A") + ggtitle("Rockland County") + theme(plot.title=element_text(size=10)))/(fig2_nyc[[1]] + labs(tag="B")+ ggtitle("New York City")+ theme(plot.title=element_text(size=10)))
 
 
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_main.pdf", fig2_main, height=5,width=8)
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_main.png", fig2_main, height=5,width=8,units="in",dpi=300)
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_alt.pdf", fig2_alt, height=5,width=8)
-ggsave(filename="~/Documents/GitHub/paralytic_polio_estimates/figures/fig2_alt.png", fig2_alt, height=5,width=8,units="in",dpi=300)
+ggsave(filename=paste0(main_wd,"/figures/fig2_main",append_to_dir_path,".pdf"), fig2_main, height=5,width=8)
+ggsave(filename=paste0(main_wd,"/figures/fig2_main",append_to_dir_path,".png"), fig2_main, height=5,width=8,units="in",dpi=300)
+ggsave(filename=paste0(main_wd,"/figures/fig2_alt",append_to_dir_path,".pdf"), fig2_alt, height=5,width=8)
+ggsave(filename=paste0(main_wd,"/figures/fig2_alt",append_to_dir_path,".png"), fig2_alt, height=5,width=8,units="in",dpi=300)
 
 
 ## Numbers for paper
@@ -522,15 +530,21 @@ trajectories %>% filter(t == "2022-08-20") %>%
     group_by(ongoing_7) %>% tally() %>%
     pivot_wider(values_from=n,names_from=ongoing_7) %>%
     mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
-    mutate(prop = (1-prop)*100)
+    mutate(prop = (prop)*100)
 
 trajectories %>% filter(t == "2022-08-20") %>%
     filter(`Consistent with further\nparalytic polio\n cases by 2022-10-21` == "Yes" ) %>%
     group_by(ongoing_7) %>% tally() %>%
     pivot_wider(values_from=n,names_from=ongoing_7) %>%
     mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
-    mutate(prop = (1-prop)*100)
+    mutate(prop = (prop)*100)
 
+trajectories %>% filter(t == "2022-08-20") %>%
+    filter(`Consistent with further\nparalytic polio\n cases by 2022-10-21` == "No" ) %>%
+    group_by(ongoing_7) %>% tally() %>%
+    pivot_wider(values_from=n,names_from=ongoing_7) %>%
+    mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
+    mutate(prop = (prop)*100)
 
 ## Effective reproduction number at seeding
 trajectories %>% group_by(sim) %>%
@@ -599,7 +613,7 @@ tmp_comb_nyc %>% filter(t == "2022-10-01")
 
 
 ## Supplementary figures
-priors <- read_csv("~/Documents/GitHub/paralytic_polio_estimates/pars/priors.csv")
+priors <- read_csv(paste0(main_wd, "/pars/priors.csv"))
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
 tmp_pars <- priors %>% filter(scenario == scenarios[1])
 prior_draws <- simulate_priors(10000,incu_mean_prior_mean=14,
@@ -699,8 +713,8 @@ p_prior <- ggplot(all_draws) +
     xlab("Value") +
     ylab("Density")
 
-ggsave(filename = "figures/prior_distributions.pdf",p_prior,height=8,width=8)
-ggsave(filename = "figures/prior_distributions.png",p_prior,height=8,width=8,units="in",dpi=300)
+ggsave(filename = paste0(main_wd,"/figures/prior_distributions",append_to_dir_path,".pdf"),p_prior,height=8,width=8)
+ggsave(filename = paste0(main_wd,"/figures/prior_distributions",append_to_dir_path,".png"),p_prior,height=8,width=8,units="in",dpi=300)
 
 
 
@@ -782,8 +796,8 @@ p_prior_intervals <-ggplot(dists_summary) +
     xlab("Days since infection") +
     ylab("Probability mass")
 
-ggsave(filename = "figures/prior_intervals.pdf",p_prior_intervals,height=3,width=8)
-ggsave(filename = "figures/prior_intervals.png",p_prior_intervals,height=3,width=8,units="in",dpi=300)
+ggsave(filename = paste0(main_wd,"/figures/prior_intervals",append_to_dir_path,".pdf"),p_prior_intervals,height=3,width=8)
+ggsave(filename = paste0(main_wd,"/figures/prior_intervals",append_to_dir_path,".png"),p_prior_intervals,height=3,width=8,units="in",dpi=300)
 
 get_beta_meanvar <- function(a,b){
     c(a/(a+b), (a*b)/((a+b)^2 * (a+b+1)))

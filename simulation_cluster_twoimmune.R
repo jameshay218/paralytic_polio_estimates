@@ -18,15 +18,29 @@ i <- 1
 print(i)
 set.seed(i)
 
-## Run scenarios
+## We have two scenarios: the high immunity and low immunity scenarios. We call the same function for each scenario, but filter to use the entries in `priors` corresponding to the correct simulation.
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
 save_wds <- c("sims","sims_low_coverage")
 for(index in 1:2){
     print(paste0("Scenario: ", scenarios[index]))
+    ## Filter the table to the correct scenario
     tmp_pars <- priors %>% filter(scenario == scenarios[index])
-    res <- random_simulation_twoimmune(n=nsims,
+    
+    ## Main function call. There are a lot of pipes here, but they are simply
+    ## extracting the correct parameter value for each argument from 
+    ## the prior table
+    res <- random_simulation_twoimmune(n=nsims, ## How many draws?
+                                       ## Maximum length of the simulation,
+                                       ## population size and seed size
+                                       tmax=180, P=340000,
+                                       ini_infs=1,
+                                       
+                                       ## Vector of observed data
                                        observed_data=c(1, rep(0,49)),
+                                       ## Record simulation index. This just makes sure that the starting index is higher if i, set on L17, is not 1
                                        index_start=(i-1)*nsims + 1,
+                                       
+                                       
                                    incu_mean_prior_mean=14,
                                    incu_mean_prior_var=3,
                                    incu_var_prior_mean=15,
@@ -47,13 +61,13 @@ for(index in 1:2){
                                        filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1),
                                    gen_interval_partial_rate_par2=tmp_pars %>% 
                                        filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2),
-                                   tmax=180, P=340000,
+                                   
+                                   ## Paralysis probability priors
                                    prob_paralysis_mean=0.0005,
                                    prob_paralysis_ps_par1 = -4,
                                    prob_paralysis_ps_par2 = -1,
                                    prob_paralysis_var = 2e-8,
                                    #prob_paralysis_ps_var = 1e-11,
-                                   ini_infs=1,
                                    R0_dist="truncnorm",
                                    R0_par1=4.9,R0_par2=2,
                                    rel_R0_par1=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1),
@@ -64,31 +78,35 @@ for(index in 1:2){
                                    prop_refractory_par2 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par2)
                                    )
     
-    
+    ## Pull out all trajectories, number of paralysis cases etc
     trajectories <- res$simulation_results
-    
     pars <- res$pars
-    
     final_sizes <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
                               final_size=res$final_size)
     paralysis_totals <- res$n_paralysis
+    
+    ## Create a data frame which flags each simulation ID as consistent
+    ## with the data or not, then filter to only those which are consistent
     data_consistent <- data.frame(sim=((i-1)*nsims + 1):((i-1)*nsims + nsims),
                                   consistent=res$data_are_consistent)
     paralysis_totals <- paralysis_totals %>% left_join(data_consistent) %>% filter(consistent==TRUE)
     
     
-    ## Get outbreak length
+    ## Find how long each simulation ran for and flag if it still had
+    ## ongoing incidence by the end.
     run_times <- trajectories %>%
         group_by(sim) %>% filter(t == max(t)) %>%
         rename(tmax = t) %>%
         rename(inc_end = inc) %>%
         mutate(ongoing = inc_end>0)
     
-    ## Make day of paralysis anchor date
+    ## For each trajectory, find the first day of paralysis onset and call this `t_start`. This will be used to set the dates later on.
     t_starts <- trajectories %>% filter(para == 1) %>% group_by(sim) %>% filter(t == min(t)) %>% rename(tstart=t) %>% select(sim, tstart)
     
     
-    ## Any infections in the X days prior to the end
+    ## Check if there were ANY new infections in the x days prior
+    ## to the end of the simulation. if so, we flag this trajectory
+    ## as "ongoing"
     x <- 10
     run_times_long <- trajectories %>%
         group_by(sim) %>% filter(t == max(t)) %>%
@@ -103,7 +121,8 @@ for(index in 1:2){
                ongoing_10_para=sum_final_para != 0)
     
     
-    ## Get parameters
+    ## Merge in all of the time-related parameters calculated above with
+    ## the model parameters
     pars <- pars %>% 
         mutate(Re=R0*prop_immune_groups.1) %>%
         left_join(run_times) %>% 
@@ -118,14 +137,21 @@ for(index in 1:2){
         drop_na() 
     
     ## Flag which runs are consistent with the data
-    use_samps <- paralysis_totals %>% filter(consistent == TRUE) %>% pull(sim)
+    use_samps <- paralysis_totals %>% filter(consistent == TRUE) %>% 
+        pull(sim)
     print(use_samps)
     
+    ## Only keep trajectories which are consistent with the data
     trajectories <- trajectories %>% filter(sim %in% use_samps)
     
+    ## WASTEWATER CONSISTENCY CHECK
     ## Rockland county trajectories only valid if they have some cases in May, June, July and August
+    ## Get date by month
     trajectories <- trajectories %>% mutate(month = round_date(t, "month"))
     
+    ## For each month in May through August, find the total incidence in 
+    ## each month, flag if it was >0, and then only keep trajectories with
+    ## incidence in each month.
     use_samps <- trajectories %>% 
         filter(month %in% as.Date(c("2022-05-01","2022-06-01","2022-07-01","2022-08-01"))) %>% 
         group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% 
@@ -139,33 +165,45 @@ for(index in 1:2){
     pars <- pars %>%
         filter(sim %in% use_samps)
     
+    ## Save the parameter draws
     if(!dir.exists(save_wds[index])) dir.create(save_wds[index])
     save(pars, file=paste0(save_wds[index],"/simulation_",i,".RData"))
 
     ## Restart simulations where they left off with/without intervention strategy
     if(length(use_samps) > 1){
+        ## The trajectories will be extended for each row of `vacc_strats`,
+        ## but for the initial version we only care about the first row (where no vaccination is performed).
         vacc_strats <- matrix(c(0,0,
                                 0.2,0.2,
                                 0.4,0.4,
                                 0.6,0.6,
                                 0.8,0.8),ncol=2,byrow=TRUE)
+        
         res2 <- restart_simulations_table_twoimmune(use_sims = use_samps,
                                   pars=res$pars,
                                   final_conditions = res$final_conditions,
                                   t_starts=res$tmax_vector,
                                   vaccinate_proportion = vacc_strats,
-                                  P=340000,
-                                  tmax=500,nruns=1)
+                                  P=340000,tmax=500, ## Pop size and simulation duration.
+                                  ## If desired, can run multiple restarts
+                                  ## for each trajectory.
+                                  nruns=1)
+        
+        ## Save the outputs
         if(!dir.exists(paste0(save_wds[index],"_traj/"))) dir.create(paste0(save_wds[index],"_traj/"))
         
         save(res2, file=paste0(save_wds[index],"_traj/traj_",i,".RData"))
     }
 }
-## Rerun for NYC-like place
+
+###################################
+## NYC SIMULATIONS
+###################################
+## For each prior draw which was consistent with the Rockland County data, 
+## start a new simulation instead using parameters for population immunity/size for NYC. The for loop simply goes through each row of the saved parameters and creates one new trajectory per row.
 nyc <- NULL
 load(paste0(save_wds[index],"/simulation_",i,".RData"))
 tmp_pars <- priors %>% filter(scenario == "NYC")
-## Need to improve this, but can seed at 1 infection per day for 2 weeks from start. Seeding would likely bey
 for(j in 1:nrow(pars)){
     print(j)
     ## Sample generation interval parameters for susceptible
@@ -213,9 +251,9 @@ for(j in 1:nrow(pars)){
     
     tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
                                     rel_R0=rel_infect_nyc,
-                                    P=8500000,
-                                    ini_infs=rep(1,14),
-                                    observed_data=NULL,
+                                    P=8500000, ## Population size of NYC
+                                    ini_infs=rep(1,14), ## Vector of daily seeding from t0
+                                    observed_data=NULL, ## Flags to ensure the simulation just runs for 500 time steps
                                     continue_run=TRUE,
                                     tmax=500,
                                     infect_rate=infect_rate_nyc,

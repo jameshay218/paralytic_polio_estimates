@@ -6,12 +6,11 @@ library(lubridate)
 #setwd("~/paralytic_polio_estimates")
 setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
-priors <- read_csv("pars/priors.csv")
+priors <- read_csv("pars/priors for model.csv")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 20000
-#nsims <- 1000
+nsims <- 1000
 
 #i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 i <- 1
@@ -46,21 +45,21 @@ for(index in 1:2){
                                    incu_var_prior_mean=15,
                                    incu_var_prior_var=1,
                                    gen_interval_susc_shape_par1=tmp_pars %>% 
-                                       filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par1),
+                                       filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par1),
                                    gen_interval_susc_shape_par2=tmp_pars %>% 
-                                       filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par2),
+                                       filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par2),
                                    gen_interval_susc_rate_par1=tmp_pars %>% 
-                                       filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par1),
+                                       filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par1),
                                    gen_interval_susc_rate_par2=tmp_pars %>% 
-                                       filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par2),
+                                       filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par2),
                                    gen_interval_partial_shape_par1=tmp_pars %>% 
-                                       filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par1),
+                                       filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par1),
                                    gen_interval_partial_shape_par2=tmp_pars %>% 
-                                       filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par2),
+                                       filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par2),
                                    gen_interval_partial_rate_par1=tmp_pars %>% 
-                                       filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1),
+                                       filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par1),
                                    gen_interval_partial_rate_par2=tmp_pars %>% 
-                                       filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2),
+                                       filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par2),
                                    
                                    ## Paralysis probability priors
                                    prob_paralysis_mean=0.0005,
@@ -70,12 +69,12 @@ for(index in 1:2){
                                    #prob_paralysis_ps_var = 1e-11,
                                    R0_dist="truncnorm",
                                    R0_par1=4.9,R0_par2=2,
-                                   rel_R0_par1=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1),
-                                   rel_R0_par2=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par2),
-                                   prop_susceptible_par1 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par1),
-                                   prop_susceptible_par2 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par2),
-                                   prop_refractory_par1 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par1),
-                                   prop_refractory_par2 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par2)
+                                   rel_R0_par1=tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par1),
+                                   rel_R0_par2=tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par2),
+                                   prop_susceptible_par1 = tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par1),
+                                   prop_susceptible_par2 = tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par2),
+                                   prop_refractory_par1 = tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par1),
+                                   prop_refractory_par2 = tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par2)
                                    )
     
     ## Pull out all trajectories, number of paralysis cases etc
@@ -122,7 +121,7 @@ for(index in 1:2){
     
     
     ## Merge in all of the time-related parameters calculated above with
-    ## the model parameters
+    ## the model.parameters
     pars <- pars %>% 
         mutate(Re=R0*prop_immune_groups.1) %>%
         left_join(run_times) %>% 
@@ -207,42 +206,42 @@ tmp_pars <- priors %>% filter(scenario == "NYC")
 for(j in 1:nrow(pars)){
     print(j)
     ## Sample generation interval parameters for susceptible
-    infect_rate_par1 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par1)
-    infect_rate_par2 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par2)
+    infect_rate_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par1)
+    infect_rate_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par2)
     
     infect_rate_nyc <- rbeta(1, infect_rate_par1, infect_rate_par2)
     
     
-    infect_shape_par1 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par1)
-    infect_shape_par2 <- tmp_pars %>% filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par2)
+    infect_shape_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par1)
+    infect_shape_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par2)
     
     infect_shape_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_par1, sd=infect_shape_par2)
     
     ## Sample generation interval parameters for partially immune
-    infect_rate_ps_par1 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1)
-    infect_rate_ps_par2 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2)
+    infect_rate_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par1)
+    infect_rate_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par2)
     
     infect_rate_ps_nyc <- rbeta(1, infect_rate_ps_par1, infect_rate_ps_par2)
     
-    infect_shape_ps_par1 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par1)
-    infect_shape_ps_par2 <- tmp_pars %>% filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par2)
+    infect_shape_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par1)
+    infect_shape_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par2)
     
     infect_shape_ps_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_ps_par1, sd=infect_shape_ps_par2)
     
     ## Sample relative infectiousness
-    rel_infect_par1 <- tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1)
-    rel_infect_par2 <- tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par2)
+    rel_infect_par1 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par1)
+    rel_infect_par2 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par2)
     
     rel_infect_nyc <- rbeta(1, rel_infect_par1, rel_infect_par2)
     
     ## Sample proportion immune
-    prop_susceptible_par1 <- tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par1)
-    prop_susceptible_par2 <- tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par2)
+    prop_susceptible_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par1)
+    prop_susceptible_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par2)
     
     prop_susceptible_nyc <- rbeta(1, prop_susceptible_par1, prop_susceptible_par2)
     
-    prop_refractory_par1 <- tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par1)
-    prop_refractory_par2 <- tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par2)
+    prop_refractory_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par1)
+    prop_refractory_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par2)
     
     prop_refractory_nyc <- rbeta(1, prop_refractory_par1, prop_refractory_par2)
     

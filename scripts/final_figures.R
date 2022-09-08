@@ -18,8 +18,8 @@ summarize <- dplyr::summarize
 scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
-reload <- FALSE
-low_coverage <- FALSE
+reload <- TRUE
+low_coverage <- TRUE
 
 if(low_coverage) {
     append_to_dir_path <- "_low_coverage"
@@ -575,7 +575,6 @@ trajectories %>% filter(t == as.Date("2022-08-20")) %>%
                             upper90=quantile(cumu_inc,0.9))
 
 ## 1st April 2023 number of infections
-## 22nd June number of infections
 trajectories %>% filter(t == as.Date(max_date)) %>% 
     ungroup() %>% summarize(mean_inf = mean(cumu_inc),
                             median_inf = median(cumu_inc),
@@ -593,8 +592,11 @@ trajectories %>% filter(t == as.Date(max_date)) %>%
 traj_summary %>% filter(t == as.Date("2022-08-20")) %>%
     mutate(prop=1-prop,lower=1-lower,upper=1-upper)
 
-## Number of paralytic polio by 1st April if 1 further case by 1st Oct
+## Number of paralytic polio by 1st April if any further case by 1st Oct
 traj_summary %>% filter(t == max_date)
+
+## Number of paralytic polio by 1st April if 1 further case by 1st Oct
+tmp_comb %>% filter(t == "2022-10-01")
 
 ## Probability of not seeing any cases in NYC at all
 traj_nyc %>% group_by(sim) %>% summarize(total_para = sum(para)) %>%
@@ -607,7 +609,7 @@ tmp_comb_nyc %>% filter(t == "2022-10-01")
 
 
 ## Supplementary figures
-priors <- read_csv(paste0(main_wd, "/pars/priors.csv"))
+priors <- read_csv(paste0(main_wd, "/pars/priors for model.csv"))
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
 tmp_pars <- priors %>% filter(scenario == scenarios[1])
 prior_draws <- simulate_priors(10000,incu_mean_prior_mean=14,
@@ -615,33 +617,33 @@ prior_draws <- simulate_priors(10000,incu_mean_prior_mean=14,
                                incu_var_prior_mean=15,
                                incu_var_prior_var=1,
                                gen_interval_susc_shape_par1=tmp_pars %>% 
-                                   filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par1),
+                                   filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par1),
                                gen_interval_susc_shape_par2=tmp_pars %>% 
-                                   filter(`model parameter` == "susceptible_generation_interval_shape") %>% pull(par2),
+                                   filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par2),
                                gen_interval_susc_rate_par1=tmp_pars %>% 
-                                   filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par1),
+                                   filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par1),
                                gen_interval_susc_rate_par2=tmp_pars %>% 
-                                   filter(`model parameter` == "susceptible_generation_interval_rate") %>% pull(par2),
+                                   filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par2),
                                gen_interval_partial_shape_par1=tmp_pars %>% 
-                                   filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par1),
+                                   filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par1),
                                gen_interval_partial_shape_par2=tmp_pars %>% 
-                                   filter(`model parameter` == "partial_generation_interval_shape") %>% pull(par2),
+                                   filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par2),
                                gen_interval_partial_rate_par1=tmp_pars %>% 
-                                   filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par1),
+                                   filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par1),
                                gen_interval_partial_rate_par2=tmp_pars %>% 
-                                   filter(`model parameter` == "partial_generation_interval_rate") %>% pull(par2),
+                                   filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par2),
                                prob_paralysis_mean=0.0005,
                                prob_paralysis_ps_par1 = -4,
                                prob_paralysis_ps_par2 = -1,
                                prob_paralysis_var = 2e-8,
                                R0_dist="truncnorm",
                                R0_par1=4.9,R0_par2=2,
-                               rel_R0_par1=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par1),
-                               rel_R0_par2=tmp_pars %>% filter(`model parameter` == "relative_infectiousness") %>% pull(par2),
-                               prop_susceptible_par1 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par1),
-                               prop_susceptible_par2 = tmp_pars %>% filter(`model parameter` == "prop_susceptible") %>% pull(par2),
-                               prop_refractory_par1 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par1),
-                               prop_refractory_par2 = tmp_pars %>% filter(`model parameter` == "prop_refractory") %>% pull(par2)
+                               rel_R0_par1=tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par1),
+                               rel_R0_par2=tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par2),
+                               prop_susceptible_par1 = tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par1),
+                               prop_susceptible_par2 = tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par2),
+                               prop_refractory_par1 = tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par1),
+                               prop_refractory_par2 = tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par2)
 )
 colnames(prior_draws)
 
@@ -807,5 +809,8 @@ priors1 <- cbind(priors, t(apply(priors, 1, function(x){
     }
 })))
 colnames(priors1)[6:7] <- c("mean","var")
-priors1 %>% filter(scenario == "rockland_high_coverage") %>% select(`model parameter`, mean, var)
-priors1 %>% filter(scenario == "NYC") %>% select(`model parameter`, mean, var)
+priors1 %>% filter(scenario == "rockland_high_coverage") %>% select(`model.parameter`, par1, par2, mean, var)
+priors1 %>% filter(scenario == "NYC") %>% select(`model.parameter`, mean, var)
+
+priors1[,c("par1","par2","mean","var")] <- signif(priors1[,c("par1","par2","mean","var")],3)
+write_csv(priors1, file="pars/priors_table.csv")

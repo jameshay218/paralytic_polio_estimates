@@ -3,17 +3,17 @@ library(tidyr)
 library(tidyverse)
 library(lubridate)
 
-#setwd("~/paralytic_polio_estimates")
-setwd("~/Documents/GitHub/paralytic_polio_estimates")
+setwd("~/paralytic_polio_estimates")
+#setwd("~/Documents/GitHub/paralytic_polio_estimates")
 
 priors <- read_csv("pars/priors for model.csv")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 1000
+nsims <- 20000
 
-#i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
-i <- 1
+i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+#i <- 1
 print(i)
 set.seed(i)
 

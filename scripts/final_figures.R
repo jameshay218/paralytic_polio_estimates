@@ -18,7 +18,7 @@ summarize <- dplyr::summarize
 scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
-reload <- TRUE
+reload <- FALSE
 low_coverage <- TRUE
 
 if(low_coverage) {
@@ -455,6 +455,7 @@ tmp_comb_nyc <- filter_traj_by_cumu_para(tmp_all_nyc)
 
 plot_fig2 <- function(tmp_comb){
     ymax <- max(tmp_comb$upper) + 5
+    tmp_comb <- tmp_comb %>% filter(t >= "2022-10-01")
     fig2A <- tmp_comb %>%
         mutate(model = as.factor(model)) %>%
         mutate(model=paste0("Further paralysis cases observed: ", model)) %>%
@@ -486,10 +487,10 @@ plot_fig2 <- function(tmp_comb){
     date_key <- c("2022-09-01"="Sep","2022-10-01"="Oct","2022-11-01"="Nov","2022-12-01"="Dec")
     tmp_comb$date1 <- date_key[as.character(tmp_comb$t)]
     
-    tmp_comb1 <- tmp_comb %>% filter(t %in% as.Date(c("2022-09-01","2022-10-01","2022-11-01","2022-12-01"))) %>%
+    tmp_comb1 <- tmp_comb %>% filter(t %in% as.Date(c("2022-10-01","2022-11-01","2022-12-01"))) %>%
         mutate(date2=paste0("Cases observed by ", date1))
-    tmp_comb1$date2 <- factor(tmp_comb1$date1,levels=c("Cases observed by Sep","Cases observed by Oct","Cases observed by Nov","Cases observed by Dec"))
-    tmp_comb1$date1 <- factor(tmp_comb1$date1, levels=c("Sep","Oct","Nov","Dec"))
+    tmp_comb1$date2 <- factor(tmp_comb1$date1,levels=c("Cases observed by Oct","Cases observed by Nov","Cases observed by Dec"))
+    tmp_comb1$date1 <- factor(tmp_comb1$date1, levels=c("Oct","Nov","Dec"))
     fig2B <- tmp_comb1 %>%   
         mutate(model=paste0("k=",model)) %>%
         ggplot() +
@@ -605,6 +606,7 @@ traj_nyc %>% group_by(sim) %>% summarize(total_para = sum(para)) %>%
     mutate(prop = `FALSE`/(`FALSE`+`TRUE`))
 
 ## Number of paralysis in NYC if we see 1 case on or after 1st October by 1st April 2023
+## Model = 1 is exactly one case
 tmp_comb_nyc %>% filter(t == "2022-10-01")
 
 

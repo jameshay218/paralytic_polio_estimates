@@ -19,7 +19,7 @@ scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
 reload <- FALSE
-low_coverage <- TRUE
+low_coverage <- FALSE
 
 if(low_coverage) {
     append_to_dir_path <- "_low_coverage"
@@ -202,19 +202,19 @@ p_traj <- trajectories %>%
                  linetype="dashed") +    
     geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
                               y=8350,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
-              size=1.75) +
+              size=2.25) +
     geom_text(data=data.frame(x=as.Date("2022-07-01"),y=6750,lab="Positive wastewater samples\n from Rockland County"),
-              aes(x=x,y=y,label=lab),size=1.75) +
+              aes(x=x,y=y,label=lab),size=2.25) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
     scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
     scale_y_continuous(limits=c(0,8800),expand=c(0,0),breaks=seq(0,8000,by=1000)) +
     theme_classic() +
     scale_color_manual(values=c("Yes"=nejm_palette[1],"No"=nejm_palette[2])) +
-    theme(axis.text=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6),
+    theme(axis.text=element_text(size=8),
+          axis.title=element_text(size=10),
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8),
           legend.position="none",
           panel.grid.major = element_line(size=0.1,color="grey70")) +
     labs(tag="A")
@@ -231,11 +231,11 @@ p_final_size <- trajectories %>% group_by(sim) %>%
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
     xlab("Estimated infections by 2022-08-20") + ylab("Simulation count") +
-    theme(axis.text=element_text(size=6),
-          axis.title=element_text(size=6),
+    theme(axis.text=element_text(size=8),
+          axis.title=element_text(size=8),
           legend.position="none",
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6)) +
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8)) +
     scale_fill_nejm()+
     labs(tag="C")
 
@@ -247,11 +247,11 @@ p_start <- trajectories %>%
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
     xlab("Seed date") + ylab("Density") +
-    theme(axis.text=element_text(size=6),
-          axis.title=element_text(size=6),
+    theme(axis.text=element_text(size=8),
+          axis.title=element_text(size=8),
           legend.position="none",
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6)) +
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8)) +
     scale_fill_nejm() +
     labs(tag="B")
 p_re <- trajectories %>% 
@@ -263,11 +263,11 @@ p_re <- trajectories %>%
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
     xlab("Initial effective reproductive number") + ylab("Density") +
-    theme(axis.text=element_text(size=6),
-          axis.title=element_text(size=6),
+    theme(axis.text=element_text(size=8),
+          axis.title=element_text(size=8),
           legend.position="none",
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6)) +
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8)) +
     scale_fill_nejm() +
     labs(tag="B")
 
@@ -279,7 +279,7 @@ p1 <- ggplot(traj_summary) +
     geom_line(aes(x=t,y=prop,col=model)) +
     geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
                               y=1.12,label=c("First case of\n paralysis","Last observation")),
-              aes(x=x,y=y,label=label),size=1.75) +
+              aes(x=x,y=y,label=label),size=2.25) +
     scale_y_continuous(limits=c(0,1.15),breaks=seq(0,1,by=0.2)) +
     geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
                                  xend=as.Date(c("2022-06-22","2022-08-20")),
@@ -296,10 +296,10 @@ p1 <- ggplot(traj_summary) +
                  breaks="1 month") +    
     theme(legend.position="none",axis.text.x=element_blank(),
           axis.line.x=element_blank(),axis.title.x=element_blank(),
-          axis.ticks.x=element_blank(),axis.text.y=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6),
+          axis.ticks.x=element_blank(),axis.text.y=element_text(size=8),
+          axis.title=element_text(size=10),
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8),
           panel.grid.major = element_line(size=0.1,color="grey70")) +
     labs(tag="D")
 
@@ -319,11 +319,11 @@ linetype="dashed") +
                                 "Further cases reported\n by October 1st"=nejm_palette[1])) +
     theme(legend.position="bottom",
           panel.grid.major = element_line(size=0.1,color="grey70"),
-          axis.text.x=element_text(size=6),
-          axis.text.y=element_text(size=6),
-          axis.title=element_text(size=8),
-          legend.text=element_text(size=6),
-          legend.title=element_text(size=6))+
+          axis.text.x=element_text(size=8),
+          axis.text.y=element_text(size=8),
+          axis.title=element_text(size=10),
+          legend.text=element_text(size=8),
+          legend.title=element_text(size=8))+
     labs(tag="E")
 
 fig1 <- p_top / p1 / p2
@@ -479,9 +479,9 @@ plot_fig2 <- function(tmp_comb){
               panel.grid.minor = element_line(size=0.25,color="grey70"),
               legend.position="none",
               strip.background = element_blank(),
-              axis.text=element_text(size=6),
-              axis.title=element_text(size=8),
-              strip.text=element_text(size=6)) +
+              axis.text=element_text(size=8),
+              axis.title=element_text(size=10),
+              strip.text=element_text(size=8)) +
         facet_wrap(~model,nrow=1)
 
     date_key <- c("2022-09-01"="Sep","2022-10-01"="Oct","2022-11-01"="Nov","2022-12-01"="Dec")
@@ -512,8 +512,8 @@ fig2_rockland <- plot_fig2(tmp_comb)
 fig2_nyc <- plot_fig2(tmp_comb_nyc)
 
 
-ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".pdf"), fig1, height=8,width=7)
-ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".png"), fig1, height=8,width=7,units='in',dpi=300)
+ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".pdf"), fig1, height=8,width=8)
+ggsave(filename=paste0(main_wd,"/figures/fig1",append_to_dir_path,".png"), fig1, height=8,width=8,units='in',dpi=300)
 
 fig2_main <- (fig2_rockland[[2]]+labs(tag="A") + ggtitle("Rockland County") + theme(plot.title=element_text(size=10)))/(fig2_nyc[[2]] + labs(tag="B")+ ggtitle("New York City")+ theme(plot.title=element_text(size=10)))
 fig2_alt <- (fig2_rockland[[1]]+labs(tag="A") + ggtitle("Rockland County") + theme(plot.title=element_text(size=10)))/(fig2_nyc[[1]] + labs(tag="B")+ ggtitle("New York City")+ theme(plot.title=element_text(size=10)))

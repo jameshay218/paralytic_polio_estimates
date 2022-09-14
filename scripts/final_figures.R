@@ -19,7 +19,8 @@ scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
 reload <- FALSE
-low_coverage <- TRUE
+low_coverage <- FALSE
+add_y_axis <- 0
 
 if(low_coverage) {
     append_to_dir_path <- "_low_coverage"
@@ -99,6 +100,8 @@ if(reload){
     load(paste0("outputs/nyc_trajectories",append_to_dir_path,".RData"))
     load(paste0("outputs/filtered_parameters",append_to_dir_path,".RData"))
 }
+
+
 
 # Clean trajectories ------------------------------------------------------
 ## Rockland County
@@ -189,26 +192,31 @@ p_traj <- trajectories %>%
     filter(sim %in% c(sub_sims1,sub_sims2)) %>% 
     filter(t <= as.Date("2022-10-21")) %>%
     ggplot() +
-    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=8000),
+    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=5000 + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill="black",alpha=0.1) +
     
-    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=6000,ymax=7500),
+    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=3500 + add_y_axis,
+                              ymax=5000 + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=nejm_palette[6],alpha=0.25) +
     
     geom_line(aes(x=t,y=inc,group=sim),col=nejm_palette[3],size=0.25) +
     geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,7500,0),yend=c(6000,8000,8000)),
+                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,5000 + add_y_axis,0),
+                                 yend=c(3500 + add_y_axis,5000 + add_y_axis,5000 + add_y_axis)),
                  aes(x=x,xend=xend,y=y,yend=yend),
                  linetype="dashed") +    
     geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=8350,label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
+                              y=5500 + add_y_axis,
+                              label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
               size=2.25) +
-    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=6750,lab="Positive wastewater samples\n from Rockland County"),
+    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=4250 + add_y_axis,
+                              lab="Positive wastewater samples\n from Rockland County"),
               aes(x=x,y=y,label=lab),size=2.25) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
     scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
-    scale_y_continuous(limits=c(0,8800),expand=c(0,0),breaks=seq(0,8000,by=1000)) +
+    scale_y_continuous(limits=c(0,6000 + add_y_axis),expand=c(0,0),
+                       breaks=seq(0,5000 + add_y_axis,by=1000)) +
     theme_classic() +
     scale_color_manual(values=c("Yes"=nejm_palette[1],"No"=nejm_palette[2])) +
     theme(axis.text=element_text(size=8),
@@ -524,8 +532,8 @@ plot_fig2 <- function(tmp_comb, ymax=50, use_extra_labels=FALSE){
    
     return(list(fig2A,fig2B))
 }
-fig2_rockland <- plot_fig2(tmp_comb,50)
-fig2_nyc <- plot_fig2(tmp_comb_nyc, 50,FALSE)
+fig2_rockland <- plot_fig2(tmp_comb,30)
+fig2_nyc <- plot_fig2(tmp_comb_nyc, 30,FALSE)
 
 #fig2_nyc[[2]] <- fig2_nyc[[2]] + scale_y_continuous(expand=c(0,0), breaks=seq(0,50,by=10))
 
@@ -599,12 +607,21 @@ trajectories %>% filter(t == as.Date(max_date)) %>%
                             lower90=quantile(cumu_inc,0.1),
                             upper90=quantile(cumu_inc,0.9))
 
+
+trajectories %>% filter(t == as.Date(max_date)) %>% 
+    ungroup() %>% summarize(mean_inf = mean(cumu_inc/3400),
+                            median_inf = median(cumu_inc/3400),
+                            lower90=quantile(cumu_inc/3400,0.1),
+                            upper90=quantile(cumu_inc/3400,0.9))
+
 ## Number of paralytic polio by 1st April
 trajectories %>% filter(t == as.Date(max_date)) %>% 
     ungroup() %>% summarize(mean_para = mean(cumu_para),
                             median_para = median(cumu_para),
                             lower90=quantile(cumu_para,0.1),
                             upper90=quantile(cumu_para,0.9))
+
+
 
 ## Number of paralytic polio by 20th August if no further cases by 1st Oct
 traj_summary %>% filter(t == as.Date("2022-08-20")) %>%
@@ -631,7 +648,7 @@ tmp_comb_nyc %>% filter(t == "2022-10-01")
 priors <- read_csv(paste0(main_wd, "/pars/priors for model.csv"))
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
 tmp_pars <- priors %>% filter(scenario == scenarios[1])
-prior_draws <- simulate_priors(10000,incu_mean_prior_mean=14,
+prior_draws <- simulate_priors(5000,incu_mean_prior_mean=14,
                                incu_mean_prior_var=3,
                                incu_var_prior_mean=15,
                                incu_var_prior_var=1,
@@ -687,7 +704,9 @@ prior_key <- c("R0"="R[0]",
                "prop_immune_groups.2"="π[PS]", 
                "prop_immune_groups.3"="π[S]")
 
-prior_draws <- prior_draws %>% mutate(Re = (prop_immune_groups.3 + prop_immune_groups.2) * (R0 * (prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2)) + R0*rel_R0s*(prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2))))
+prior_draws <- prior_draws %>% mutate(Re = (R0/(prop_immune_groups.3 + prop_immune_groups.2)) * (prop_immune_groups.3 + rel_R0s*prop_immune_groups.2))
+                                          
+
 prior_draws <- prior_draws %>% 
     mutate(prob_paralysis_ps = (1-prob_paralysis_ps)*prob_paralysis_s)
 
@@ -703,7 +722,7 @@ prior_draws_long$Parameter = prior_key[prior_draws_long$name]
 
 
 
-res <-res%>% mutate(Re = (prop_immune_groups.3 + prop_immune_groups.2) * (R0 * (prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2)) + R0*rel_R0*(prop_immune_groups.3/(prop_immune_groups.3+prop_immune_groups.2))))
+res <-res%>% mutate(Re = (R0/(prop_immune_groups.3 + prop_immune_groups.2)) * (prop_immune_groups.3 + rel_R0*prop_immune_groups.2))
 res <- res %>% mutate(incu_mean=incu_shape*incu_scale,incu_var=incu_shape*incu_scale*incu_scale)
 
 res1 <- res[,colnames(res) %in% c("sim",names(prior_key))]
@@ -790,6 +809,7 @@ dists_prior <- bind_rows(incu_periods_prior,infectiousness_prior,infectiousness_
 
 dists_all<- bind_rows(dists%>%mutate(Distribution="Post-filter"),
                       dists_prior %>% mutate(Distribution="Prior"))
+
 dists_summary <- dists_all %>% group_by(Distribution,model, time_since_infection) %>%
     summarize(mean_p=mean(probability),lower_90=quantile(probability,0.1),
               upper_90=quantile(probability,0.9))
@@ -836,4 +856,4 @@ if(low_coverage == FALSE){
 priors1 %>% filter(scenario == "NYC") %>% select(`model.parameter`, mean, var)
 
 priors1[,c("par1","par2","mean","var")] <- signif(priors1[,c("par1","par2","mean","var")],3)
-write_csv(priors1, file="pars/priors_table.csv")
+write_csv(priors1, file=paste0("pars/priors",append_to_dir_path,"_table.csv"))

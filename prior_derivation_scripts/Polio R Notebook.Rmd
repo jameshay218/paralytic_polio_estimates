@@ -1,0 +1,405 @@
+---
+title: "Polio model"
+output: html_notebook
+---
+ 
+```{r load packages, results="hide", warning=FALSE}
+library(fitdistrplus)
+library(abind)
+```
+ 
+```{r set working directory to source file location,echo=F}
+
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+```
+
+```{r DATA importing NY census data to construct age distributions}
+census <- read.csv("NY_census.csv")
+str(census)
+```
+
+```{r DATA importing NY SIS data to get vaccination coverage}
+
+sis <- read.csv("NY_SIS.csv")
+str(sis)
+
+counties <- c("ROCKLAND","ORANGE","SULLIVAN","BRONX","KINGS","NEW YORK","QUEENS","RICHMOND")
+years <- c("2012-2013","2013-2014","2014-2015","2015-2016","2016-2017","2017-2018","2018-2019","2019-2020","2020-2021")
+
+get_coverage_list <- function(data, county, year, means=F){
+ 
+ if(length(county)>1 & length(year)>1){stop("only one of 'function' and 'year' may have length>1")}
+ 
+ n <- max(length(county),length(year))
+ counties <- rep(county,n/length(county))
+ years <- rep(year,n/length(year))
+ 
+ coverage_list <- vector("list",n) 
+ 
+ for(i in 1:n){
+  coverage_raw <- data$Percent.Immunized.Polio[data$County==counties[i] & data$Report.Period==years[i]]
+  coverage_filtered <- setdiff(coverage_raw, c(0,NA)) # removing NAs and zeros - the latter because most zeros appear to be anomalies (no exemptions reported and/or a deviation from otherwise moderate to high coverage)
+  coverage_list[[i]] <- coverage_filtered
+ }
+
+ names(coverage_list) <- if(length(county)>1){county}else if(length(year)>1){year}else{NULL}
+ 
+ out <- if(means==F){coverage_list}else{sapply(coverage_list,mean)}
+ return(out)
+ 
+}
+
+test<-get_coverage_list(sis, county=counties,year=years[9])
+boxplot(test,range=0)
+
+test <- get_coverage_list(sis,county=counties,year=years[9],mean=T)
+test
+
+```
+
+```{r DATA generating age distributions for Rockland, Orange, Sullivan, and NYC}
+
+# counties of interest
+counties <- c("Rockland County","Orange County","Sullivan County","Bronx County","Kings County","New York County","Queens County","Richmond County")
+counties_abbr <- c("Rockland","Orange","Sullivan","Bronx","Brooklyn","Manhattan","Queens","Staten")
+
+age_props <- array(NA,dim=c(18,length(counties)),
+                   dimnames=list(c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80-84", "85+"),
+                                 counties_abbr))
+
+# proportions in each age group
+for(i in 1:length(counties)){
+ age_props[,i] <- round(census$TOT_POP[census$CTYNAME==counties[i] & census$YEAR==12 & census$AGEGRP!=0],digits=3)
+}
+
+# dividing age groups into age by year (age=1:100)
+
+age_cats <- mapply(0:99,FUN=paste0, rep("-",100),1:100)
+
+# row i = age i-1 to i
+age <- array(NA, dim=c(100,length(counties)), dimnames=list(age_cats,counties_abbr))
+
+for(i in 1:length(counties)){
+  age[,i]<-rep(c(age_props[1,i]/4,age_props[2:17,i]/5,age_props[18,i]/16),rep(c(4,5,16),c(1,16,1)))
+}
+
+head(age)
+
+save(age, file = "NY census 2019")
+```
+
+```{r VALUE defining parameter values from Kalkowska et al. }
+
+immune_stage_duration <- 1 #duration of each immune stage
+duration_fecal <- 27.8 # susceptible/unvaccinated 
+duration_oral <- 13.4 # sim. 
+latent_period <- 3
+prop_oral <- 0.83
+
+vax_effect <- matrix(c(0.28,0.78,
+                       0.41,0.77,
+                       0.88,0.79,
+                       0.36,0.68,
+                       0.54,0.72),ncol=2,byrow=T,dimnames=list(c("susceptibility","infectiousness_fecal","infectiousness_oral","shed_duration_fecal","shed_duration_oral"),c("IPV","OPV"))) 
+# initial (first immune stage) reductions in susceptibility, infectiousness, and duration of shedding relative to unvaccinated)
+
+vax_residual_effect <- matrix(c(0.02,0.38,
+                       0.37,0.91,
+                       0.99,0.89,
+                       0.42,0.87,
+                       0.93,0.97),ncol=2,byrow=T,dimnames=dimnames(vax_effect)) # fraction of initial vaccine effect that remains in the last immune stage))
+
+shedding_weights <- c(12,40,12,4)/68
+```
+
+```{r FUNCTION immune_stage_dist function: assign waning stage as a function of time since vaccination}
+
+immune_stage_dist<-function(t,d=immune_stage_duration,n=5){ # t = time since vaccination; d = duration of each immune stage; n = number of stages
+  dist<-rep(0,n)
+  s<-min(1+floor(t/d),n)
+  if(s>=1){dist[s]<-1}
+  return(dist)
+}
+```
+
+```{r VALUE defining vaccination coverage}
+
+coverage_1 <- 0.6 # coverage at age 2 
+coverage_2 <- 0.9 # coverage at age 5 - pre-mandate
+coverage_3 <- 0.95 # coverage at age 5 (post-mandate) OR in 2019 (for K-12 at the time)
+```
+
+```{r OBJECT age_dist: age distribution for specified counties}
+
+counties <- colnames(age)
+counties
+
+specify_counties <- c("Rockland")
+
+age_totals <- rowSums(matrix(age[,specify_counties],ncol=length(specify_counties))) # total in each age group
+
+age_dist <- age_totals/sum(age_totals) # age distribution for the counties specified
+```
+
+```{r OBJECT stage_age_vax: sorting population by age, vaccine received, and waning stage}
+ages <- 0:99
+
+stage_age_vax <- array(0,dim=c(5,100,2))
+
+vax_profile <- read.csv("age vaccination profiles.csv")
+str(vax_profile)
+
+LPV_birth <- vax_profile$LPV.at.birth
+OPV_cov_2 <- coverage_1*vax_profile$OPV.at.age.2 # coverage with OPV at age 2
+OPV_cov_5 <- (coverage_2-coverage_1)*vax_profile$OPV.at.age.5 # coverage with IPV at age 5
+IPV_cov_2 <- coverage_1*vax_profile$IPV.at.age.2 # coverage with IPV at age 2
+IPV_cov_5_pre <- (coverage_2-coverage_1)*vax_profile$IPV.at.age.5.premandate # coverage with IPV at age 5 up to 2019
+IPV_cov_2019 <- (coverage_3 - coverage_2)*vax_profile$IPV.in.2019 # coverage with IPV in 2019 (when religious vaccine exemptions were invalidated - applicable only to K-12)
+IPV_cov_5_post <- (coverage_3 - coverage_1)*vax_profile$IPV.at.age.5.postmandate # coverage with IPV at age 5 from 2020-onward
+
+stage_age_vax[,,1] <- t(IPV_cov_2*t(sapply(ages-2,immune_stage_dist))+ (IPV_cov_5_pre + IPV_cov_5_post)*t(sapply(ages-5,immune_stage_dist)) + IPV_cov_2019*t(sapply(rep(3,100),immune_stage_dist)))
+
+stage_age_vax[,,2] <- t( LPV_birth*t(sapply(ages,immune_stage_dist))+ OPV_cov_2*t(sapply(ages-2,immune_stage_dist))+ OPV_cov_5*t(sapply(ages-5,immune_stage_dist)) )
+
+stage_age_vax <- sweep(stage_age_vax,MARGIN=2,STATS=age_dist,FUN="*")
+
+sum(stage_age_vax)
+```
+
+```{r FUNCTION wane: obtain stage-specific vaccine effectiveness}
+
+wane <- function(effect, residual, nsteps=5, shape=5){ 
+  # takes vaccine effect in first immune stage, residual effect in last immune stage, number of steps and shape parameter and gives value for all steps, including first and last
+  x_initial <- 1-effect
+  x_final <- 1-residual*effect
+  x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps)+1)/nsteps)^shape
+  return(1-x)
+}
+```
+
+```{r OBJECT vax_effect_by.stage: stage-specific vaccine effectiveness (susceptibility, shedding duration, shedding intensity)}
+vax_effect_by.stage <- array(NA,dim=c(5,2,5),dimnames=list(NULL, c("IPV","OPV"),c("susceptibility","infectiousness_fecal","infectiousness_oral","shed_duration_fecal","shed_duration_oral")))
+  
+vax_effect_by.stage[,"IPV",] <- mapply(vax_effect[,"IPV"],FUN=wane,residual=vax_residual_effect[,"IPV"])
+vax_effect_by.stage[,"OPV",] <- mapply(vax_effect[,"OPV"],FUN=wane,residual=vax_residual_effect[,"OPV"])
+
+vax_effect_by.stage
+```
+
+```{r FUNCTION time_dist: shedding duration --> distribution of transmission times (relative to onset of infectiousness)}
+
+time_dist <- function(duration, weights = shedding_weights, n = 2e5){ # length(weights) = number of stages
+  
+  k<-length(weights)
+  times <- NULL
+  
+  r <- matrix( rexp(k*n, rate=k/duration), nrow=n)
+  t <- runif(n, min=0, max=rowSums(r))
+  x <- runif(n)
+  
+  for(i in 1:n){
+    
+    breaks <- rep(NA,k-1); for(j in 1:(k-1)){breaks[j] <- sum(r[i,1:j])}
+    
+    interval <- if(t[i]>max(breaks)){k}else{min(which(t[i]<breaks))}
+    
+    if(x[i]<=weights[interval]){times<-c(times,t[i])}else{}
+  }
+  
+  pars <- fitdist(times,"gamma", method="mle")$estimate
+
+  return(pars)
+}
+```
+
+```{r OBJECT infectivity_age: relative infectiousness as a function of age (from Famulare et al.)}
+shed_survival <- function(t, Nab){
+  
+  mu <- 43.0 # shedding duration (WPV)
+  sigma <- 1.69 # scale parameter (WPV)
+  delta <- 1.16 # median reduction per log2(Nab)
+  
+  erf <- function(x) 2*pnorm(x*sqrt(2)) - 1
+
+  y <- 0.5*(1 - erf( (log(t) - (log(mu)-log(delta)*log(Nab, base = 2))) / (sqrt(2)*log(sigma))))
+  return(y)
+}
+
+peak_conc <- function(age, Nab){ # age in years
+  
+  Smax <- 6.7
+  Smin <- 4.3
+  tau<-12
+  k<-0.056
+  
+  y <- if(age < 0.5){Smax}else{
+    (Smax - Smin)*exp((0.5-age)/tau) + Smin
+  } 
+  
+  z <- (1 - k*log(Nab, base = 2))*y
+  return(10^z)
+}
+
+viral_conc <- function(t, age, Nab){ # age in years (carried over from peak_conc)
+  
+  peak <- peak_conc(age, Nab)
+  
+  eta <- 1.65 # location parameter
+  nu <- 0.17 # scale parameter
+  xi <- 0.32 # time-dependent scale
+  
+  y <- if(t==0){0}else{
+    max(0, (peak/t)*exp( eta - 0.5*(nu^2) - ((log(t) - eta)^2)/(2*(nu + xi*log(t))^2) ))
+  }
+   
+  return(y)
+}
+
+prob_infect <- function(Nab, dose){ # probability of becoming infected
+  
+  alpha <- 0.44 # shape parameter
+  beta <- 2.3 # scale parameter (WPV)
+  gamma <- 0.46 # immunity-dependent shape parameter exponent
+  
+  y <- 1 - (1 + dose/beta)^(-alpha*Nab^(-gamma))
+  return(y)
+}
+
+infectivity <- function(Nab_donor, Nab_recipient, age_donor){ # age in years
+  
+  t <- seq(0, 60, 0.1)
+  
+  p_shed <- sapply(t, FUN = shed_survival, Nab = Nab_donor)
+  
+  q_shed <- sapply(t, FUN = viral_conc, age = age_donor, Nab = Nab_donor)
+  
+  c_shed <- p_shed*q_shed
+  
+  p_infect <- sapply(Nab_recipient, FUN = prob_infect, dose = 0.01*c_shed)
+  
+  infect_sum <- sum(p_infect)
+  
+  return(infect_sum)
+  
+}
+
+infectivity_age <- mapply(1, FUN = infectivity, Nab_recipient = 1, age_donor = 1:100)/infectivity(1,1,1)
+
+plot(infectivity_age,type="l",ylim=c(0,1))
+
+save(infectivity_age, file = "relative infectivity by age")
+
+```
+
+```{r PARAMETER population breakdown into susceptible, partially susceptible, and refractory}
+
+susceptible <- 1 - sum(stage_age_vax)
+
+refractory <- sum(vax_effect_by.stage[,"IPV", "susceptibility"]*stage_age_vax[,,1] + vax_effect_by.stage[,"OPV", "susceptibility"]*stage_age_vax[,,2])
+
+partial <- 1 - (susceptible + refractory)
+
+SPR <- c(S=susceptible, P=partial, R=refractory)
+
+SPR
+```
+
+```{r PARAMETER susceptible generation interval distribution parameters, message=FALSE, warning=FALSE}
+set.seed(1)
+
+pars_fecal <- time_dist(duration_fecal) # this is for transmission time measured from onset of infectiousness - NOT the generation interval
+pars_oral <- time_dist(duration_oral) # sim.
+
+pars_fecal
+pars_oral
+
+transmit_time <- vector("list",2)
+  
+route <- sample(1:2,size=1e4,replace=T,prob=c(1-prop_oral,prop_oral))
+x <- unname(table(factor(route,levels=1:2)))
+  
+transmit_time[[1]] <- rgamma(x[1],pars_fecal[1],pars_fecal[2])+rgamma(x[1],2,2/latent_period)
+transmit_time[[2]] <- rgamma(x[2],pars_oral[1],pars_oral[2])+rgamma(x[2],2,2/latent_period)
+  
+times <- unlist(transmit_time)
+  
+fit <- fitdist(times,"gamma","mle")$estimate
+  
+s_generation_interval_pars <- fit
+
+s_generation_interval_pars
+```
+
+```{r OBJECT s_infectiousness: infectiousness of partially immune is normalized to this value}
+
+susc_age <- age_dist - apply(stage_age_vax, 2, sum)
+
+s_infectiousness <- sum(susc_age*infectivity_age)/susceptible
+
+s_infectiousness # not a model parameter - infectiousness of partially immune will be normalized to this value
+```
+
+```{r OBJECT p_stage_age_vax: sorting partially susceptible population by age, vaccine received, and waning stage}
+
+p_stage_age_vax <- abind((1-vax_effect_by.stage[,"IPV", "susceptibility"])*stage_age_vax[,,1],(1-vax_effect_by.stage[,"OPV", "susceptibility"])*stage_age_vax[,,2],along=3)/partial # distribution of age/vaccine/stage among non-refractory vaccine recipients
+
+```
+
+```{r PARAMETER p_infectiousness: relative infectiousness of partially immune}
+
+relative_duration <- 1-vax_effect_by.stage[,,c("shed_duration_fecal","shed_duration_oral")]
+
+relative_infectiousness <- 1-vax_effect_by.stage[,,c("infectiousness_fecal","infectiousness_oral")]
+
+relative_total_shedding <- relative_duration*relative_infectiousness; dimnames(relative_total_shedding) <- list(NULL,c("IPV","OPV"),c("fecal","oral"))
+
+relative_transmission_prob_route <- abind((1-prop_oral)*relative_total_shedding[,,"fecal"],prop_oral*relative_total_shedding[,,"oral"],along=3); dimnames(relative_transmission_prob_route) <- list(NULL,c("IPV","OPV"),c("fecal","oral"))
+  
+relative_transmission_prob <- apply(relative_transmission_prob_route, 1:2, sum)
+  
+relative_transmission_prob_age <- relative_transmission_prob%o%infectivity_age
+relative_transmission_prob_age <- aperm(relative_transmission_prob_age, c(1,3,2))
+
+p_infectiousness <- sum(relative_transmission_prob_age*p_stage_age_vax)/s_infectiousness
+```
+
+```{r OBJECTS shape_params and rate_params: for distribution of time to transmission (from onset of infectiousness) in partially immune}
+
+shape_params <- array(NA,dim=dim(relative_duration),dimnames=dimnames(relative_duration))
+rate_params <- array(NA,dim=dim(relative_duration),dimnames=dimnames(relative_duration))
+
+shape_params[,,1] <- pars_fecal[1] # use same shape parameter as susceptible but adjust rate parameter
+shape_params[,,2] <- pars_oral[1]
+
+rate_params[,,1] <- pars_fecal[2]/relative_duration[,,"shed_duration_fecal"]
+rate_params[,,2] <- pars_oral[2]/relative_duration[,,"shed_duration_oral"]
+
+```
+
+```{r PARAMETER partially immune generation interval distribution parameters, message=FALSE, warning=FALSE}
+
+transmit_time <- vector("list",20)
+  
+stage_vax_route <- sample(1:20,size=1e4,replace=T,prob=relative_transmission_prob_route)
+  
+x<-unname(table(factor(stage_vax_route,levels=1:20)))
+  
+for(i in 1:20){transmit_time[[i]]<-(rgamma(x[i],shape_params[i],rate_params[i])+rgamma(x[i],2,2/latent_period))}
+  
+times <- unlist(transmit_time)
+  
+fit<-fitdist(times,"gamma","mle")$estimate
+  
+p_generation_interval_pars <- fit 
+
+p_generation_interval_pars
+
+```
+
+
+
+
+
+
+
+

@@ -67,9 +67,10 @@ wane <- function(effect, residual, nsteps=5, shape=5){
 #######################################################################
 
 generate_priors <- function(specify_counties, # c("Rockland", "Orange", "Sullivan", "Bronx", "Brooklyn", "Manhattan", "Queens", "Staten"
-                            coverage_1, # age 2
-                            coverage_2, # age 5, pre-mandate
-                            coverage_3, # age 5, post-mandate
+                            coverage_1, # age 2 (IPV)
+                            coverage_2, # age 5 (IPV), pre-mandate
+                            coverage_3, # age 5 (IPV), post-mandate
+                            coverage_4, # age 2 (OPV)
                             N = 5e3, # size drawn from priors on Kalkowska et al parameters
                             M = 1e3 # # size drawn to estimate generation interval distribution parameters
                             ){
@@ -120,10 +121,11 @@ vax_residual_effect <- matrix(c(0.02,0.38,
 
 # ----- drawing from priors on input parameters (vaccination coverage, shedding duration, waning rate, etc.)
  
-cover_pars <- sapply(list(coverage_1,coverage_2,coverage_3),FUN=beta_pars, c=4)
+cover_pars <- sapply(list(coverage_1,coverage_2,coverage_3, coverage_4),FUN=beta_pars, c=4)
 cover_1 <- rbeta(N, cover_pars[1,1], cover_pars[2,1])
 cover_2 <- mapply(rbeta(N, cover_pars[1,2], cover_pars[2,2]),FUN=max,cover_1)
 cover_3 <- mapply(rbeta(N, cover_pars[1,3], cover_pars[2,3]),FUN=max,cover_2)
+cover_4 <- rbeta(N, cover_pars[1,4], cover_pars[2,4])
  
 immune_duration <- rgamma(N, 1.5*immune_stage_duration, 1.5)
  
@@ -159,16 +161,19 @@ for(i in 1:N){
 }
 
 LPV_birth <- sweep(immune_dist_birth, MARGIN=3, STATS=vax_profile$LPV.at.birth,FUN="*")
-OPV_cov_2 <- sweep(cover_1*immune_dist_2,MARGIN=3,STATS=vax_profile$OPV.at.age.2,FUN="*")
-OPV_cov_5 <- sweep((cover_2-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$OPV.at.age.5,FUN="*")
+OPV_cov_2 <- sweep(cover_4*immune_dist_2,MARGIN=3,STATS=vax_profile$OPV.at.age.2,FUN="*")
 IPV_cov_2 <- sweep(cover_1*immune_dist_2,MARGIN=3,STATS=vax_profile$IPV.at.age.2,FUN="*")
 IPV_cov_5_pre <- sweep((cover_2-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.premandate,FUN="*")
 IPV_cov_5_post <- sweep((cover_3-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.postmandate,FUN="*")
 IPV_cov_2019 <- sweep((cover_3-cover_2)*immune_dist_2019,MARGIN=3,STATS=vax_profile$IPV.in.2019,FUN="*")
 
-OPV <- LPV_birth + OPV_cov_2 + OPV_cov_5
+OPV <- LPV_birth + OPV_cov_2
 
 IPV <- IPV_cov_2 + IPV_cov_5_pre + IPV_cov_5_post + IPV_cov_2019 
+
+IPV[1,,]
+
+colSums(OPV[1,,]+IPV[1,,])
 
 stage_age_vax <- abind(IPV, OPV,along=4)
 

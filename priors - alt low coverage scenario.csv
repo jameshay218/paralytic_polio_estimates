@@ -1,8 +1,0 @@
-"scenario","model.parameter","distribution","par1","par2"
-"rockland_low_coverage","prop_susceptible","beta",34.6279683530077,217.426012136179
-"rockland_low_coverage","prop_refractory","beta",3.9858634327761,18.1289731793744
-"rockland_low_coverage","relative_infectiousness","beta",7.37915790449668,62.1455322217343
-"rockland_low_coverage","susceptible_generation_interval_shape","norm",2.47245889132063,0.424981599858955
-"rockland_low_coverage","susceptible_generation_interval_rate","beta",23.6431523108469,68.4827477496451
-"rockland_low_coverage","partial_generation_interval_shape","norm",1.96883402447233,0.412798714531127
-"rockland_low_coverage","partial_generation_interval_rate","beta",11.6902153775032,38.3751612218725

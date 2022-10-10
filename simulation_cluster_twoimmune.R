@@ -35,7 +35,7 @@ for(index in 2:2){
                                            ini_infs=1,
                                            
                                            ## Vector of observed data
-                                           observed_data=c(1, rep(0,49)),
+                                           observed_data=c(1, rep(0,110)),
                                            ## Record simulation index. This just makes sure that the starting index is higher if i, set on L17, is not 1
                                            index_start=(i-1)*nsims + 1,
                                            
@@ -195,83 +195,84 @@ for(index in 2:2){
         }
 }
 
-if(FALSE){
-###################################
+#if(FALSE){
+
+    ###################################
 ## NYC SIMULATIONS
 ###################################
 ## For each prior draw which was consistent with the Rockland County data, 
 ## start a new simulation instead using parameters for population immunity/size for NYC. The for loop simply goes through each row of the saved parameters and creates one new trajectory per row.
-nyc <- NULL
-load(paste0(save_wds[1],"/simulation_",i,".RData"))
-tmp_pars <- priors %>% filter(scenario == "NYC")
-for(j in 1:nrow(pars)){
-    print(j)
+#nyc <- NULL
+#load(paste0(save_wds[1],"/simulation_",i,".RData"))
+#tmp_pars <- priors %>% filter(scenario == "NYC")
+#for(j in 1:nrow(pars)){
+    #print(j)
     ## Sample generation interval parameters for susceptible
-    infect_rate_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par1)
-    infect_rate_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par2)
+    #infect_rate_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par1)
+    #infect_rate_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_rate") %>% pull(par2)
     
-    infect_rate_nyc <- rbeta(1, infect_rate_par1, infect_rate_par2)
+    #infect_rate_nyc <- rbeta(1, infect_rate_par1, infect_rate_par2)
     
     
-    infect_shape_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par1)
-    infect_shape_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par2)
+    #infect_shape_par1 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par1)
+    #infect_shape_par2 <- tmp_pars %>% filter(`model.parameter` == "susceptible_generation_interval_shape") %>% pull(par2)
     
-    infect_shape_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_par1, sd=infect_shape_par2)
+    #infect_shape_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_par1, sd=infect_shape_par2)
     
     ## Sample generation interval parameters for partially immune
-    infect_rate_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par1)
-    infect_rate_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par2)
+    #infect_rate_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par1)
+    #infect_rate_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_rate") %>% pull(par2)
     
-    infect_rate_ps_nyc <- rbeta(1, infect_rate_ps_par1, infect_rate_ps_par2)
+    #infect_rate_ps_nyc <- rbeta(1, infect_rate_ps_par1, infect_rate_ps_par2)
     
-    infect_shape_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par1)
-    infect_shape_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par2)
+    #infect_shape_ps_par1 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par1)
+    #infect_shape_ps_par2 <- tmp_pars %>% filter(`model.parameter` == "partial_generation_interval_shape") %>% pull(par2)
     
-    infect_shape_ps_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_ps_par1, sd=infect_shape_ps_par2)
+    #infect_shape_ps_nyc <- truncnorm::rtruncnorm(1, a=0, mean=infect_shape_ps_par1, sd=infect_shape_ps_par2)
     
     ## Sample relative infectiousness
-    rel_infect_par1 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par1)
-    rel_infect_par2 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par2)
+    #rel_infect_par1 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par1)
+    #rel_infect_par2 <- tmp_pars %>% filter(`model.parameter` == "relative_infectiousness") %>% pull(par2)
     
-    rel_infect_nyc <- rbeta(1, rel_infect_par1, rel_infect_par2)
+    #rel_infect_nyc <- rbeta(1, rel_infect_par1, rel_infect_par2)
     
     ## Sample proportion immune
-    prop_susceptible_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par1)
-    prop_susceptible_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par2)
+    #prop_susceptible_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par1)
+    #prop_susceptible_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_susceptible") %>% pull(par2)
     
-    prop_susceptible_nyc <- rbeta(1, prop_susceptible_par1, prop_susceptible_par2)
+    #prop_susceptible_nyc <- rbeta(1, prop_susceptible_par1, prop_susceptible_par2)
     
-    prop_refractory_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par1)
-    prop_refractory_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par2)
+    #prop_refractory_par1 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par1)
+    #prop_refractory_par2 <- tmp_pars %>% filter(`model.parameter` == "prop_refractory") %>% pull(par2)
     
-    prop_refractory_nyc <- rbeta(1, prop_refractory_par1, prop_refractory_par2)
+    #prop_refractory_nyc <- rbeta(1, prop_refractory_par1, prop_refractory_par2)
     
-    prop_immune_nyc <- c(prop_refractory_nyc, 1-prop_refractory_nyc-prop_susceptible_nyc,prop_susceptible_nyc)
-    prop_immune_nyc <- prop_immune_nyc/sum(prop_immune_nyc)
+    #prop_immune_nyc <- c(prop_refractory_nyc, 1-prop_refractory_nyc-prop_susceptible_nyc,prop_susceptible_nyc)
+    #prop_immune_nyc <- prop_immune_nyc/sum(prop_immune_nyc)
     
-    tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
-                                    rel_R0=rel_infect_nyc,
-                                    P=8500000, ## Population size of NYC
-                                    ini_infs=rep(1,14), ## Vector of daily seeding from t0
-                                    observed_data=NULL, ## Flags to ensure the simulation just runs for 500 time steps
-                                    continue_run=TRUE,
-                                    tmax=500,
-                                    infect_rate=infect_rate_nyc,
-                                    infect_shape=infect_shape_nyc,
-                                    infect_partial_shape=infect_shape_ps_nyc,
-                                    infect_partial_rate=infect_rate_ps_nyc,
-                                    incu_scale=pars$incu_scale[j],
-                                    incu_shape=pars$incu_shape[j],
-                                    prob_paralysis_s = pars$prob_paralysis_s[j], 
-                                    prob_paralysis_ps = pars$prob_paralysis_ps[j],
-                                    prop_immune_groups = prop_immune_nyc)
+    #tmp <- run_simulation_twoimmune(R0=pars$R0[j], 
+     #                               rel_R0=rel_infect_nyc,
+     #                               P=8500000, ## Population size of NYC
+     #                               ini_infs=rep(1,14), ## Vector of daily seeding from t0
+     #                               observed_data=NULL, ## Flags to ensure the simulation just runs for 500 time steps
+     #                               continue_run=TRUE,
+     #                               tmax=500,
+     #                               infect_rate=infect_rate_nyc,
+     #                               infect_shape=infect_shape_nyc,
+     #                               infect_partial_shape=infect_shape_ps_nyc,
+     #                              infect_partial_rate=infect_rate_ps_nyc,
+     #                               incu_scale=pars$incu_scale[j],
+     #                               incu_shape=pars$incu_shape[j],
+     #                               prob_paralysis_s = pars$prob_paralysis_s[j], 
+     #                               prob_paralysis_ps = pars$prob_paralysis_ps[j],
+     #                               prop_immune_groups = prop_immune_nyc)
     
-    dat <- tmp$dat
-    dat$sim <- pars$sim[j]
-    nyc[[j]] <- dat
-}
-nyc <- do.call("bind_rows",nyc)
-if(!dir.exists(paste0("sims_nyc/"))) dir.create(paste0("sims_nyc/"))
-save(nyc, file=paste0("sims_nyc/nyc_",i,".RData"))
+    #dat <- tmp$dat
+    #dat$sim <- pars$sim[j]
+    #nyc[[j]] <- dat
+#}
+#nyc <- do.call("bind_rows",nyc)
+#if(!dir.exists(paste0("sims_nyc/"))) dir.create(paste0("sims_nyc/"))
+#save(nyc, file=paste0("sims_nyc/nyc_",i,".RData"))
 
-}
+#}

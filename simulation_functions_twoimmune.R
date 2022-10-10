@@ -51,7 +51,7 @@ run_simulation_twoimmune <- function(
                             ## R0 and relative reduction in R0 for partially immune popn
                             R0=2, rel_R0=1, 
                             ## Vector of observed paralysis data
-                            observed_data=c(1, rep(0,48)),
+                            observed_data=c(1, rep(0,110)),
                             ## Generation interval distribution of fully susceptible population
                             infect_rate=0.71, infect_shape=9.8, 
                             infect_partial_rate=0.71, infect_partial_shape=9.8, 
@@ -485,7 +485,7 @@ simulate_priors <- function(n=100, ## How many draws?
 ## The function returns a list of multiple data frames, all just giving the
 ## end state of the trajectories and corresponding prior draws.
 random_simulation_twoimmune <- function( n=100,  
-                                         observed_data=c(1,rep(0,48)),
+                                         observed_data=c(1,rep(0,110)),
                                tmax=100,
                                P=350000,
                                continue_run=FALSE,

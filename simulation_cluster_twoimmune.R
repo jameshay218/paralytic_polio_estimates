@@ -3,24 +3,24 @@ library(tidyr)
 library(tidyverse)
 library(lubridate)
 
-#setwd("~/paralytic_polio_estimates")
-setwd("~/Documents/GitHub/paralytic_polio_estimates")
+setwd("C:/Users/mab4629/Desktop/Polio/paralytic_polio_estimates/")
 
 priors <- read_csv("pars/priors for model.csv")
 
 source("simulation_functions_twoimmune.R")
 
-nsims <- 50000
+nsims <- 100000
 
 #i <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
-i <- 8
-print(i)
-set.seed(i)
+#i <- 8
+#print(i)
+set.seed(5)
 
 ## We have two scenarios: the high immunity and low immunity scenarios. We call the same function for each scenario, but filter to use the entries in `priors` corresponding to the correct simulation.
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
+population_size <- c(340000,91000)
 save_wds <- c("sims","sims_low_coverage")
-for(index in 2:2){
+for(index in 1:2){
         print(paste0("Scenario: ", scenarios[index]))
         ## Filter the table to the correct scenario
         tmp_pars <- priors %>% filter(scenario == scenarios[index])
@@ -31,7 +31,7 @@ for(index in 2:2){
         res <- random_simulation_twoimmune(n=nsims, ## How many draws?
                                            ## Maximum length of the simulation,
                                            ## population size and seed size
-                                           tmax=180, P=340000,
+                                           tmax=180, P=population_size[index],
                                            ini_infs=1,
                                            
                                            ## Vector of observed data
@@ -144,20 +144,20 @@ for(index in 2:2){
         trajectories <- trajectories %>% filter(sim %in% use_samps)
         
         ## WASTEWATER CONSISTENCY CHECK
-        ## Rockland county trajectories only valid if they have some cases in May, June, July and August
+        ## Rockland county trajectories only valid if they have some cases in May, June, July, August and September
         ## Get date by month
         trajectories <- trajectories %>% mutate(month = round_date(t, "month"))
         
-        ## For each month in May through August, find the total incidence in 
+        ## For each month in May through September, find the total incidence in 
         ## each month, flag if it was >0, and then only keep trajectories with
         ## incidence in each month.
         use_samps <- trajectories %>% 
-            filter(month %in% as.Date(c("2022-05-01","2022-06-01","2022-07-01","2022-08-01"))) %>% 
+            filter(month %in% as.Date(c("2022-05-01","2022-06-01","2022-07-01","2022-08-01","2022-09-01"))) %>% 
             group_by(sim, month) %>% dplyr::summarize(monthly_inc=sum(inc)) %>% 
             mutate(keep=monthly_inc > 0) %>% 
             select(sim, keep, month) %>% 
             pivot_wider(id_cols = sim,values_from="keep",names_from="month") %>%
-            filter(`2022-05-01`==TRUE & `2022-06-01`==TRUE & `2022-07-01`==TRUE & `2022-08-01`==TRUE) %>% 
+            filter(`2022-05-01`==TRUE & `2022-06-01`==TRUE & `2022-07-01`==TRUE & `2022-08-01`==TRUE & `2022-09-01`==TRUE) %>% 
             pull(sim)
         
         trajectories <- trajectories %>% filter(sim %in% use_samps)
@@ -183,7 +183,7 @@ for(index in 2:2){
                                       final_conditions = res$final_conditions,
                                       t_starts=res$tmax_vector,
                                       vaccinate_proportion = vacc_strats,
-                                      P=340000,tmax=500, ## Pop size and simulation duration.
+                                      P=population_size[index],tmax=500, ## Pop size and simulation duration.
                                       ## If desired, can run multiple restarts
                                       ## for each trajectory.
                                       nruns=1)
@@ -197,9 +197,9 @@ for(index in 2:2){
 
 #if(FALSE){
 
-    ###################################
-## NYC SIMULATIONS
 ###################################
+## NYC SIMULATIONS
+
 ## For each prior draw which was consistent with the Rockland County data, 
 ## start a new simulation instead using parameters for population immunity/size for NYC. The for loop simply goes through each row of the saved parameters and creates one new trajectory per row.
 #nyc <- NULL

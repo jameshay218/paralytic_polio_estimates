@@ -311,20 +311,22 @@ p1 <- ggplot(traj_summary) +
           panel.grid.major = element_line(size=0.1,color="grey70")) +
     labs(tag="D")
 
+p1
+
 p2 <- ggplot(traj_summary) + 
     geom_ribbon(aes(x=t,ymin=lower1,ymax=upper1,fill=model),alpha=0.25) +
     geom_line(aes(x=t,y=median_para,col=model)) +
-    geom_vline(xintercept=as.Date(c("2022-06-22","2022-08-20")),
+    geom_vline(xintercept=as.Date(c("2022-06-22","2022-10-10")),
 linetype="dashed") +
     ylab("Cumulative paralysis cases") +
-    scale_x_date(date_label="%b",limits=as.Date(c("2022-06-01",max_date)),
+    scale_x_date(date_label="%b",limits=as.Date(c("2022-04-01",max_date)),
                  breaks="1 month") +
     theme_classic() +
     xlab("Date") +
-    scale_fill_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
-                               "Further cases reported\n by October 1st"=nejm_palette[1])) +
-    scale_color_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
-                                "Further cases reported\n by October 1st"=nejm_palette[1])) +
+    scale_fill_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by December 1st"=nejm_palette[2],
+                               "Further cases reported\n by December 1st"=nejm_palette[1])) +
+    scale_color_manual(name="Data assumption",values=c("Current data"=nejm_palette[3],"No cases by December 1st"=nejm_palette[2],
+                                "Further cases reported\n by December 1st"=nejm_palette[1])) +
     theme(legend.position="bottom",
           panel.grid.major = element_line(size=0.1,color="grey70"),
           axis.text.x=element_text(size=8),

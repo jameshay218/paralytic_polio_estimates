@@ -9,7 +9,7 @@ library(tidyverse)
 library(paletteer)
 library(data.table)
 
-main_wd <- "C:/Users/Mary/OneDrive - Harvard University/Github copy/paralytic_polio_estimates"
+main_wd <- "C:/Users/mab4629/Desktop/Polio/paralytic_polio_estimates"
 setwd(main_wd)
 source("simulation_functions_twoimmune.R")
 max_date <- "2023-04-01"
@@ -18,12 +18,12 @@ summarize <- dplyr::summarize
 scales::show_col(pal_nejm("default")(8))
 nejm_palette <- c("#BC3C29FF","#0072B5FF","#E18727FF","#20854EFF","#7876B1FF","#6F99ADFF")
 
-reload <- TRUE
-low_coverage <- TRUE
+reload <- FALSE
+low_coverage <- FALSE
 add_y_axis <- 0
 
 if(low_coverage) {
-    append_to_dir_path <- " alt low coverage"
+    append_to_dir_path <- "_low_coverage"
 } else{
     append_to_dir_path <- ""
     
@@ -139,7 +139,7 @@ trajectories <- pad_rows(trajectories)
 #traj_nyc <- pad_rows(traj_nyc)
 
 ## Flag if further cases observed or not
-tmp_flags <- trajectories %>% filter(t <= "2022-10-01") %>% group_by(sim) %>% dplyr::summarise(y=sum(para)) %>% mutate(no_further_cases=y==1)
+tmp_flags <- trajectories %>% filter(t <= "2022-12-01") %>% group_by(sim) %>% dplyr::summarise(y=sum(para)) %>% mutate(no_further_cases=y==1)
 
 ## Summarize proportion of trajectories with ongoing incidence over time
 traj_summary1 <- trajectories %>% filter(t <= max_date) %>% 
@@ -161,7 +161,7 @@ traj_summary2 <- trajectories %>% left_join(tmp_flags) %>%
         median_para=median(cumu_para),lower1=quantile(cumu_para,0.1),upper1=quantile(cumu_para,0.9),
         y=sum(y),N=n())%>% group_by(t) %>% 
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
-    mutate(model="No cases by October 1st")
+    mutate(model="No cases by December 1st")
 
 ## Calculate extinction probability if further cases observed
 traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
@@ -173,50 +173,63 @@ traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
         median_para=median(cumu_para),lower1=quantile(cumu_para,0.1),upper1=quantile(cumu_para,0.9),
                      y=sum(y),N=n())%>% group_by(t) %>% 
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
-    mutate(model="Further cases reported\n by October 1st")
+    mutate(model="Further cases reported\n by December 1st")
 
 ## Combine
 traj_summary <- bind_rows(traj_summary1,traj_summary2,traj_summary3)
+traj_summary
 
 ## Plot some trajectories
 set.seed(1234)
 sub_sims1 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==TRUE) %>% 
-    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+    select(sim) %>% distinct() %>% sample_n(12) %>% pull(sim)
 sub_sims2 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==FALSE) %>% 
-    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+    select(sim) %>% distinct() %>% sample_n(12) %>% pull(sim)
 trajectories <- trajectories %>% 
     left_join(tmp_flags) %>%
     mutate(`Consistent with further\nparalytic polio\n cases by 2022-10-21` = ifelse(no_further_cases==TRUE,"No","Yes")) 
 
+ymax_traj <- max(trajectories$inc[trajectories$sim%in%c(sub_sims1,sub_sims2)])
+ylims_box <- c(1.3,1.6)*ymax_traj
+ymax_plot <- 2*ymax_traj
+y_text_box <- mean(ylims_box)
+y_text_abovebox <- 1.8*ymax_traj
+y_end_abovebox <- 1.7*ymax_traj
+x_box_middle <- median(seq(as.Date("2022-05-01"),as.Date("2022-09-30"),by=1))
+text_size <- 2.5
+
+ymax_plot
+y_interval <- 250
+
 p_traj <- trajectories %>% 
     filter(sim %in% c(sub_sims1,sub_sims2)) %>% 
-    filter(t <= as.Date("2022-10-21")) %>%
+    filter(t <= as.Date("2023-04-01")) %>%
     ggplot() +
-    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=5000 + add_y_axis),
+    geom_rect(data=data.frame(xmin=as.Date("2022-10-10"),xmax=as.Date("2023-04-01"),ymin=0,ymax=ymax_plot + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill="black",alpha=0.1) +
     
-    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=3500 + add_y_axis,
-                              ymax=5000 + add_y_axis),
+    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-09-30"),ymin=ylims_box[1] + add_y_axis,
+                              ymax=ylims_box[2] + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=nejm_palette[6],alpha=0.25) +
     
     geom_line(aes(x=t,y=inc,group=sim),col=nejm_palette[3],size=0.25) +
-    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,5000 + add_y_axis,0),
-                                 yend=c(3500 + add_y_axis,5000 + add_y_axis,5000 + add_y_axis)),
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-09-30")),
+                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-09-30")),y=c(0,ylims_box[2] + add_y_axis,0),
+                                 yend=c(ylims_box[1] + add_y_axis,y_end_abovebox + add_y_axis,y_end_abovebox + add_y_axis)),
                  aes(x=x,xend=xend,y=y,yend=yend),
                  linetype="dashed") +    
-    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=5500 + add_y_axis,
+    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-09-30")),
+                              y=y_text_abovebox + add_y_axis,
                               label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
-              size=2.25) +
-    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=4250 + add_y_axis,
+              size=text_size) +
+    geom_text(data=data.frame(x=x_box_middle,y=y_text_box + add_y_axis,
                               lab="Positive wastewater samples\n from Rockland County"),
-              aes(x=x,y=y,label=lab),size=2.25) +
+              aes(x=x,y=y,label=lab),size=text_size) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
-    scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
-    scale_y_continuous(limits=c(0,6000 + add_y_axis),expand=c(0,0),
-                       breaks=seq(0,5000 + add_y_axis,by=1000)) +
+    scale_x_date(limits=as.Date(c("2022-04-01","2023-04-01")),date_labels="%b",breaks="month") +
+    scale_y_continuous(limits=c(0,ymax_plot + add_y_axis),expand=c(0,0),
+                       breaks=seq(0,ymax_plot + add_y_axis,by=y_interval)) +
     theme_classic() +
     scale_color_manual(values=c("Yes"=nejm_palette[1],"No"=nejm_palette[2])) +
     theme(axis.text=element_text(size=8),
@@ -231,14 +244,14 @@ p_traj
 
 p_final_size <- trajectories %>% group_by(sim) %>%
     mutate(y=cumsum(inc)) %>% 
-    filter(t == "2022-08-20") %>% 
+    filter(t == "2022-10-10") %>% 
     mutate(model = "Current data") %>%
     ggplot() + geom_histogram(aes(x=y,fill=model),binwidth=10000,
                                   color="black",fill=nejm_palette[3],alpha=0.25) +
     scale_x_continuous(breaks=seq(0,250000,by=100000))+
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
-    xlab("Estimated infections by 2022-08-20") + ylab("Simulation count") +
+    xlab("Estimated infections\nby 2022-10-10") + ylab("Simulation count") +
     theme(axis.text=element_text(size=8),
           axis.title=element_text(size=8),
           legend.position="none",
@@ -247,21 +260,7 @@ p_final_size <- trajectories %>% group_by(sim) %>%
     scale_fill_nejm()+
     labs(tag="C")
 
-p_start <- trajectories %>% 
-    group_by(sim) %>%
-    filter(t == min(t)) %>%
-    mutate(model = "Current data") %>%
-    ggplot() + geom_density(aes(x=date_start,fill=model),color="black",fill="grey70") +
-    scale_y_continuous(expand=c(0,0)) +
-    theme_classic() +
-    xlab("Seed date") + ylab("Density") +
-    theme(axis.text=element_text(size=8),
-          axis.title=element_text(size=8),
-          legend.position="none",
-          legend.text=element_text(size=8),
-          legend.title=element_text(size=8)) +
-    scale_fill_nejm() +
-    labs(tag="B")
+
 p_re <- trajectories %>% 
     group_by(sim) %>%
     filter(t == min(t)) %>%
@@ -270,7 +269,7 @@ p_re <- trajectories %>%
     geom_vline(xintercept=1,linetype="dashed") +
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
-    xlab("Initial effective reproductive number") + ylab("Density") +
+    xlab("Initial effective\nreproductive number") + ylab("Density") +
     theme(axis.text=element_text(size=8),
           axis.title=element_text(size=8),
           legend.position="none",
@@ -281,6 +280,7 @@ p_re <- trajectories %>%
 
 pX <- (p_re/p_final_size)
 p_top <- p_traj + pX + plot_layout(ncol=2,widths=c(3,1))
+p_top
 
 p1 <- ggplot(traj_summary) + 
     geom_ribbon(aes(x=t,ymin=upper,ymax=lower,fill=model),alpha=0.25) +

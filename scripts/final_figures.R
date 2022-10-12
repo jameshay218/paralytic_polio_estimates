@@ -51,15 +51,15 @@ if(reload){
     }
     traj <- as_tibble(do.call("bind_rows",all_traj))
     
-    setwd(paste0(main_wd, "/sims_nyc/"))
-    all_nyc <-  NULL
-    for(i in 1:500){
-        if(file.exists(paste0("nyc_",i,".RData"))){
-            load(paste0("nyc_",i,".RData"))
-            all_nyc[[i]] <- nyc
-        }
-    }
-    traj_nyc <- as_tibble(do.call("bind_rows",all_nyc))
+    #setwd(paste0(main_wd, "/sims_nyc/"))
+    #all_nyc <-  NULL
+    #for(i in 1:500){
+    #if(file.exists(paste0("nyc_",i,".RData"))){
+    #load(paste0("nyc_",i,".RData"))
+    #all_nyc[[i]] <- nyc
+    #}
+    #}
+    #traj_nyc <- as_tibble(do.call("bind_rows",all_nyc))
     
     
     ## Set day 0
@@ -73,34 +73,33 @@ if(reload){
     #traj <- traj %>% ungroup() %>% mutate(month = round_date(t, "month"))
     
     ## Assume NYC is seeded 4 weeks later
-    traj_nyc <- traj_nyc %>% 
-        left_join(res %>% select(sim, date_start)) %>%
-        mutate(t = as.Date(date_start + t) + 28) %>%
-        drop_na() 
+    # traj_nyc <- traj_nyc %>% 
+    #left_join(res %>% select(sim, date_start)) %>%
+    # mutate(t = as.Date(date_start + t) + 28) %>%
+    #drop_na() 
     
-    traj_nyc <- traj_nyc %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
-                                              cumu_para = cumsum(para))
-    #traj_nyc <- traj_nyc %>% ungroup() %>% mutate(month = round_date(t, "month"))
+    #traj_nyc <- traj_nyc %>% group_by(sim) %>% mutate(cumu_inc = cumsum(inc),
+    #cumu_para = cumsum(para))
+    ###traj_nyc <- traj_nyc %>% ungroup() %>% mutate(month = round_date(t, "month"))
     
     traj$vacc_prop <- as.factor(traj$vacc_prop)
     trajectories <- traj %>% filter(vacc_prop==1) %>% dplyr::select(-c(vacc_prop,rep))
     
     subset_sims <- sample(unique(traj$sim),min(10000,length(unique(traj$sim))))
     trajectories <- trajectories %>% filter(sim %in% subset_sims)
-    traj_nyc <- traj_nyc %>% filter(sim %in% subset_sims)
+    #traj_nyc <- traj_nyc %>% filter(sim %in% subset_sims)
     res <- res %>% filter(sim %in% subset_sims)
     
     
     save(trajectories,file=paste0(main_wd, "/outputs/fitted_trajectories",append_to_dir_path,".RData"))
-    save(traj_nyc,file=paste0(main_wd, "/outputs/nyc_trajectories",append_to_dir_path,".RData"))
+    #save(traj_nyc,file=paste0(main_wd, "/outputs/nyc_trajectories",append_to_dir_path,".RData"))
     save(res,file=paste0(main_wd, "/outputs/filtered_parameters",append_to_dir_path,".RData"))
     setwd(main_wd)
 } else {
     load(paste0("outputs/fitted_trajectories",append_to_dir_path,".RData"))
-    load(paste0("outputs/nyc_trajectories",append_to_dir_path,".RData"))
+    #load(paste0("outputs/nyc_trajectories",append_to_dir_path,".RData"))
     load(paste0("outputs/filtered_parameters",append_to_dir_path,".RData"))
 }
-
 
 
 # Clean trajectories ------------------------------------------------------
@@ -136,10 +135,10 @@ pad_rows <- function(tmp_traj){
     tmp_traj
 }
 trajectories <- pad_rows(trajectories)
-traj_nyc <- pad_rows(traj_nyc)
+#traj_nyc <- pad_rows(traj_nyc)
 
 ## Flag if further cases observed or not
-tmp_flags <- trajectories %>% filter(t <= "2022-10-01") %>% group_by(sim) %>% dplyr::summarise(y=sum(para)) %>% mutate(no_further_cases=y==1)
+tmp_flags <- trajectories %>% filter(t <= "2022-12-01") %>% group_by(sim) %>% dplyr::summarise(y=sum(para)) %>% mutate(no_further_cases=y==1)
 
 ## Summarize proportion of trajectories with ongoing incidence over time
 traj_summary1 <- trajectories %>% filter(t <= max_date) %>% 
@@ -161,7 +160,7 @@ traj_summary2 <- trajectories %>% left_join(tmp_flags) %>%
         median_para=median(cumu_para),lower1=quantile(cumu_para,0.1),upper1=quantile(cumu_para,0.9),
         y=sum(y),N=n())%>% group_by(t) %>% 
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
-    mutate(model="No cases by October 1st")
+    mutate(model="No cases by December 1st")
 
 ## Calculate extinction probability if further cases observed
 traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
@@ -171,52 +170,66 @@ traj_summary3 <- trajectories %>% left_join(tmp_flags) %>%
     group_by(t) %>% 
     dplyr::summarize(
         median_para=median(cumu_para),lower1=quantile(cumu_para,0.1),upper1=quantile(cumu_para,0.9),
-                     y=sum(y),N=n())%>% group_by(t) %>% 
+        y=sum(y),N=n())%>% group_by(t) %>% 
     mutate(prop=y/N,lower=binconf(y,N)[2],upper=binconf(y,N)[3])%>%
-    mutate(model="Further cases reported\n by October 1st")
+    mutate(model="Further cases reported\n by December 1st")
 
 ## Combine
 traj_summary <- bind_rows(traj_summary1,traj_summary2,traj_summary3)
+traj_summary
 
+## Plot some trajectories
 ## Plot some trajectories
 set.seed(1234)
 sub_sims1 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==TRUE) %>% 
-    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+    select(sim) %>% distinct() %>% sample_n(12) %>% pull(sim)
 sub_sims2 <- trajectories %>% left_join(tmp_flags) %>% filter(no_further_cases==FALSE) %>% 
-    select(sim) %>% distinct() %>% sample_n(15) %>% pull(sim)
+    select(sim) %>% distinct() %>% sample_n(12) %>% pull(sim)
 trajectories <- trajectories %>% 
     left_join(tmp_flags) %>%
-    mutate(`Consistent with further\nparalytic polio\n cases by 2022-10-21` = ifelse(no_further_cases==TRUE,"No","Yes")) 
+    mutate(`Consistent with further\nparalytic polio\n cases by 2022-12-01` = ifelse(no_further_cases==TRUE,"No","Yes")) 
+
+ymax_traj <- max(trajectories$inc[trajectories$sim%in%c(sub_sims1,sub_sims2)])
+ylims_box <- c(1.2,1.5)*ymax_traj
+ymax_plot <- 2*ymax_traj
+y_text_box <- mean(ylims_box)
+y_text_abovebox <- 1.8*ymax_traj
+y_end_abovebox <- 1.7*ymax_traj
+x_box_middle <- median(seq(as.Date("2022-05-01"),as.Date("2022-09-30"),by=1))
+text_size <- 3
+
+ymax_plot
+y_interval <- 250
 
 p_traj <- trajectories %>% 
     filter(sim %in% c(sub_sims1,sub_sims2)) %>% 
-    filter(t <= as.Date("2022-10-21")) %>%
+    filter(t <= as.Date("2023-04-01")) %>%
     ggplot() +
-    geom_rect(data=data.frame(xmin=as.Date("2022-08-20"),xmax=as.Date("2022-11-01"),ymin=0,ymax=5000 + add_y_axis),
+    geom_rect(data=data.frame(xmin=as.Date("2022-10-10"),xmax=as.Date("2023-04-01"),ymin=0,ymax=ymax_plot + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill="black",alpha=0.1) +
     
-    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-08-20"),ymin=3500 + add_y_axis,
-                              ymax=5000 + add_y_axis),
+    geom_rect(data=data.frame(xmin=as.Date("2022-05-01"),xmax=as.Date("2022-09-30"),ymin=ylims_box[1] + add_y_axis,
+                              ymax=ylims_box[2] + add_y_axis),
               aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax),fill=nejm_palette[6],alpha=0.25) +
     
     geom_line(aes(x=t,y=inc,group=sim),col=nejm_palette[3],size=0.25) +
-    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-08-20")),y=c(0,5000 + add_y_axis,0),
-                                 yend=c(3500 + add_y_axis,5000 + add_y_axis,5000 + add_y_axis)),
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-06-22","2022-09-30")),
+                                 xend=as.Date(c("2022-06-22","2022-06-22","2022-09-30")),y=c(0,ylims_box[2] + add_y_axis,0),
+                                 yend=c(ylims_box[1] + add_y_axis,y_end_abovebox + add_y_axis,y_end_abovebox + add_y_axis)),
                  aes(x=x,xend=xend,y=y,yend=yend),
                  linetype="dashed") +    
-    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                              y=5500 + add_y_axis,
+    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-09-30")),
+                              y=y_text_abovebox + add_y_axis,
                               label=c("First case of\n paralysis","Last observation")),aes(x=x,y=y,label=label),
-              size=2.25) +
-    geom_text(data=data.frame(x=as.Date("2022-07-01"),y=4250 + add_y_axis,
+              size=text_size) +
+    geom_text(data=data.frame(x=x_box_middle,y=y_text_box + add_y_axis,
                               lab="Positive wastewater samples\n from Rockland County"),
-              aes(x=x,y=y,label=lab),size=2.25) +
+              aes(x=x,y=y,label=lab),size=text_size) +
     ylab("Incidence of polio infections")+
     xlab("Date") +
-    scale_x_date(limits=as.Date(c("2022-03-01","2022-11-01")),date_labels="%b",breaks="month") +
-    scale_y_continuous(limits=c(0,6000 + add_y_axis),expand=c(0,0),
-                       breaks=seq(0,5000 + add_y_axis,by=1000)) +
+    scale_x_date(limits=as.Date(c("2022-04-01","2023-04-01")),date_labels="%b",breaks="month") +
+    scale_y_continuous(limits=c(0,ymax_plot + add_y_axis),expand=c(0,0),
+                       breaks=seq(0,ymax_plot + add_y_axis,by=y_interval)) +
     theme_classic() +
     scale_color_manual(values=c("Yes"=nejm_palette[1],"No"=nejm_palette[2])) +
     theme(axis.text=element_text(size=8),
@@ -228,17 +241,16 @@ p_traj <- trajectories %>%
     labs(tag="A")
 p_traj
 
-
 p_final_size <- trajectories %>% group_by(sim) %>%
     mutate(y=cumsum(inc)) %>% 
-    filter(t == "2022-08-20") %>% 
+    filter(t == "2022-10-10") %>% 
     mutate(model = "Current data") %>%
     ggplot() + geom_histogram(aes(x=y,fill=model),binwidth=10000,
-                                  color="black",fill=nejm_palette[3],alpha=0.25) +
-    scale_x_continuous(breaks=seq(0,250000,by=100000))+
+                              color="black",fill=nejm_palette[3],alpha=0.25) +
+    scale_x_continuous(breaks=seq(0,100000,by=20000))+
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
-    xlab("Estimated infections by 2022-08-20") + ylab("Simulation count") +
+    xlab("Estimated infections\nby 2022-10-10") + ylab("Simulation count") +
     theme(axis.text=element_text(size=8),
           axis.title=element_text(size=8),
           legend.position="none",
@@ -247,21 +259,7 @@ p_final_size <- trajectories %>% group_by(sim) %>%
     scale_fill_nejm()+
     labs(tag="C")
 
-p_start <- trajectories %>% 
-    group_by(sim) %>%
-    filter(t == min(t)) %>%
-    mutate(model = "Current data") %>%
-    ggplot() + geom_density(aes(x=date_start,fill=model),color="black",fill="grey70") +
-    scale_y_continuous(expand=c(0,0)) +
-    theme_classic() +
-    xlab("Seed date") + ylab("Density") +
-    theme(axis.text=element_text(size=8),
-          axis.title=element_text(size=8),
-          legend.position="none",
-          legend.text=element_text(size=8),
-          legend.title=element_text(size=8)) +
-    scale_fill_nejm() +
-    labs(tag="B")
+
 p_re <- trajectories %>% 
     group_by(sim) %>%
     filter(t == min(t)) %>%
@@ -270,7 +268,7 @@ p_re <- trajectories %>%
     geom_vline(xintercept=1,linetype="dashed") +
     scale_y_continuous(expand=c(0,0)) +
     theme_classic() +
-    xlab("Initial effective reproductive number") + ylab("Density") +
+    xlab("Initial effective\nreproductive number") + ylab("Density") +
     theme(axis.text=element_text(size=8),
           axis.title=element_text(size=8),
           legend.position="none",
@@ -279,26 +277,31 @@ p_re <- trajectories %>%
     scale_fill_nejm() +
     labs(tag="B")
 
-pX <- (p_re/p_final_size)
-p_top <- p_traj + pX + plot_layout(ncol=2,widths=c(3,1))
+#pX <- (p_re/p_final_size)
+#p_top <- p_traj + pX + plot_layout(ncol=2,widths=c(3,1))
+pY <- p_re + p_final_size
+p_traj_over_pY <- p_traj/pY + plot_layout(heights=c(2,1))
+p_traj_over_pY
+
+ggsave(filename=paste0(main_wd,"/figures/fig1_abc",append_to_dir_path,".png"), p_traj_over_pY, height=7,width=8,units='in',dpi=300)
 
 p1 <- ggplot(traj_summary) + 
     geom_ribbon(aes(x=t,ymin=upper,ymax=lower,fill=model),alpha=0.25) +
     geom_line(aes(x=t,y=prop,col=model)) +
-    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
+    geom_text(data=data.frame(x=as.Date(c("2022-06-22","2022-10-10")),
                               y=1.12,label=c("First case of\n paralysis","Last observation")),
               aes(x=x,y=y,label=label),size=2.25) +
     scale_y_continuous(limits=c(0,1.15),breaks=seq(0,1,by=0.2)) +
-    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-08-20")),
-                                 xend=as.Date(c("2022-06-22","2022-08-20")),
-                                 y=0,yend=1),
+    geom_segment(data=data.frame(x=as.Date(c("2022-06-22","2022-10-10")),
+                                 xend=as.Date(c("2022-06-22","2022-10-10")),
+                                 y=0,yend=1.05),
                  aes(x=x,xend=xend,y=y,yend=yend),
                linetype="dashed") +    ylab("Probability epidemic is ongoing\n (continued cases in previous 7 days)")+
     theme_classic() +
-    scale_fill_manual(values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
-                               "Further cases reported\n by October 1st"=nejm_palette[1])) +
-    scale_color_manual(values=c("Current data"=nejm_palette[3],"No cases by October 1st"=nejm_palette[2],
-                               "Further cases reported\n by October 1st"=nejm_palette[1]))  +
+    scale_fill_manual(values=c("Current data"=nejm_palette[3],"No cases by December 1st"=nejm_palette[2],
+                               "Further cases reported\n by December 1st"=nejm_palette[1])) +
+    scale_color_manual(values=c("Current data"=nejm_palette[3],"No cases by December 1st"=nejm_palette[2],
+                               "Further cases reported\n by December 1st"=nejm_palette[1]))  +
     
     scale_x_date(date_label="%b",limits=as.Date(c("2022-06-01",max_date)),
                  breaks="1 month") +    
@@ -319,7 +322,7 @@ p2 <- ggplot(traj_summary) +
     geom_vline(xintercept=as.Date(c("2022-06-22","2022-10-10")),
 linetype="dashed") +
     ylab("Cumulative paralysis cases") +
-    scale_x_date(date_label="%b",limits=as.Date(c("2022-04-01",max_date)),
+    scale_x_date(date_label="%b",limits=as.Date(c("2022-06-01",max_date)),
                  breaks="1 month") +
     theme_classic() +
     xlab("Date") +
@@ -336,9 +339,11 @@ linetype="dashed") +
           legend.title=element_text(size=8))+
     labs(tag="E")
 
-fig1 <- p_top / p1 / p2
-fig1
+#fig1 <- p_top / p1 / p2
+p1_p2 <- p1/p2
+p1_p2
 
+ggsave(filename=paste0(main_wd,"/figures/fig1_de",append_to_dir_path,".png"), p1_p2, height=7,width=8,units='in',dpi=300)
 
 # Hypothetical further observations ---------------------------------------
 ## For every day after 2022-08-20, if we've seen another 0, 1, 2 or 3 
@@ -567,6 +572,7 @@ trajectories %>% filter(t == "2022-08-20") %>%
 #    mutate(prop=`TRUE`/(`TRUE` + `FALSE`)) %>%
 #    mutate(prop = (prop)*100)
 
+###################################################
 
 ## Effective reproduction number at seeding
 trajectories %>% group_by(sim) %>%
@@ -595,8 +601,8 @@ trajectories %>% filter(t == as.Date("2022-07-18")) %>%
                             lower90=quantile(cumu_inc,0.1),
                             upper90=quantile(cumu_inc,0.9))
 
-## 20th August number of infections
-trajectories %>% filter(t == as.Date("2022-08-20")) %>% 
+## 10th October number of infections
+trajectories %>% filter(t == as.Date("2022-10-10")) %>% 
     ungroup() %>% summarize(mean_inf = mean(cumu_inc),
                             median_inf = median(cumu_inc),
                             lower90=quantile(cumu_inc,0.1),
@@ -623,33 +629,27 @@ trajectories %>% filter(t == as.Date(max_date)) %>%
                             lower90=quantile(cumu_para,0.1),
                             upper90=quantile(cumu_para,0.9))
 
-
-
-## Number of paralytic polio by 20th August if no further cases by 1st Oct
-traj_summary %>% filter(t == as.Date("2022-08-20")) %>%
-    mutate(prop=1-prop,lower=1-lower,upper=1-upper)
-
-## Number of paralytic polio by 1st April if any further case by 1st Oct
+## Number of paralytic polio by 1st April if any further case by 1st Dec
 traj_summary %>% filter(t == max_date)
 
 ## Number of paralytic polio by 1st April if 1 further case by 1st Oct
 tmp_comb %>% filter(t == "2022-10-01")
 
 ## Probability of not seeing any cases in NYC at all
-traj_nyc %>% group_by(sim) %>% summarize(total_para = sum(para)) %>%
-    mutate(any_para=total_para > 0) %>% group_by(any_para) %>%
-    tally() %>% pivot_wider(names_from=any_para,values_from=n) %>%
-    mutate(prop = `FALSE`/(`FALSE`+`TRUE`))
+#traj_nyc %>% group_by(sim) %>% summarize(total_para = sum(para)) %>%
+#    mutate(any_para=total_para > 0) %>% group_by(any_para) %>%
+#    tally() %>% pivot_wider(names_from=any_para,values_from=n) %>%
+#    mutate(prop = `FALSE`/(`FALSE`+`TRUE`))
 
 ## Number of paralysis in NYC if we see 1 case on or after 1st October by 1st April 2023
 ## Model = 1 is exactly one case
-tmp_comb_nyc %>% filter(t == "2022-10-01")
+#tmp_comb_nyc %>% filter(t == "2022-10-01")
 
 
 ## Supplementary figures
 priors <- read_csv(paste0(main_wd, "/pars/priors for model.csv"))
 scenarios <- c("rockland_high_coverage","rockland_low_coverage")
-tmp_pars <- priors %>% filter(scenario == scenarios[1])
+tmp_pars <- priors %>% filter(scenario == scenarios[2])
 prior_draws <- simulate_priors(5000,incu_mean_prior_mean=14,
                                incu_mean_prior_var=3,
                                incu_var_prior_mean=15,
@@ -749,10 +749,13 @@ p_prior <- ggplot(all_draws) +
     xlab("Value") +
     ylab("Density")
 
+p_prior
+
+
 ggsave(filename = paste0(main_wd,"/figures/prior_distributions",append_to_dir_path,".pdf"),p_prior,height=8,width=8)
 ggsave(filename = paste0(main_wd,"/figures/prior_distributions",append_to_dir_path,".png"),p_prior,height=8,width=8,units="in",dpi=300)
 
-
+############################################
 
 ## Get post-filter and prior draws for generation interval dist and incubation period dist
 ## Generation interval plots

@@ -12,7 +12,13 @@ rockland_low <- generate_priors(specify_counties = "Rockland",
 
 pars_rockland_low <- data.frame(matrix(nrow=7,ncol=4,dimnames=list(NULL,c("model parameter","distribution","par1","par2"))))
 
-pars_rockland_low[,1] <- c("prop_susceptible","prop_refractory","relative_infectiousness","susceptible_generation_interval_shape","susceptible_generation_interval_rate","partial_generation_interval_shape","partial_generation_interval_rate")
+pars_rockland_low[,1] <- c("prop_susceptible",
+                           "prop_refractory",
+                           "relative_infectiousness",
+                           "susceptible_generation_interval_shape",
+                           "susceptible_generation_interval_rate",
+                           "partial_generation_interval_shape",
+                           "partial_generation_interval_rate")
 
 x<-rockland_low[,1] 
 hist(x,breaks=100,freq=F)
@@ -35,10 +41,10 @@ pars_rockland_low[,3]/(pars_rockland_low[,3]+pars_rockland_low[,4])
 ############################
 
 rockland_high <- generate_priors(specify_counties = "Rockland",
-                                coverage_1 = 0.6, 
-                                coverage_2 = 0.9, 
-                                coverage_3 = 0.95,
-                                coverage_4 = 0.9)
+                                 coverage_1 = x, # coverage at age 2 
+                                 coverage_2 = x, #### updated from 0.9 # coverage at age 5 - pre-mandate
+                                 coverage_3 = y,  #### updated from 0.95 # coverage at age 5 (post-mandate) OR in 2019 (for K-12 at the time)
+                                 coverage_4 = 0.9)
 
 pars_rockland_high <- data.frame(matrix(nrow=7,ncol=4,dimnames=list(NULL,c("model parameter","distribution","par1","par2"))))
 

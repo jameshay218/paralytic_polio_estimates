@@ -60,7 +60,7 @@ wane <- function(effect, residual, nsteps=5, shape=5){
   # takes vaccine effect in first immune stage, residual effect in last immune stage, number of steps and shape parameter and gives value for all steps, including first and last
   x_initial <- 1-effect
   x_final <- 1-residual*effect
-  x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps)+1)/nsteps)^shape
+  x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps))/(nsteps-1))^shape #### Changed from x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps)+1)/nsteps)^shape 
   return(1-x)
 }
 
@@ -113,7 +113,7 @@ vax_effect <- matrix(c(0.28,0.78,
 
 # fraction of initial vaccine effect that remains in the last immune stage))
 
-vax_residual_effect <- matrix(c(0.02,0.38,
+vax_residual_effect <- matrix(c(1e-10,0.38, #### Updated to 1e-10 from 0.02
                                 0.37,0.91,
                                 0.99,0.89,
                                 0.42,0.87,
@@ -123,7 +123,7 @@ vax_residual_effect <- matrix(c(0.02,0.38,
  
 cover_pars <- sapply(list(coverage_1,coverage_2,coverage_3, coverage_4),FUN=beta_pars, c=4)
 cover_1 <- rbeta(N, cover_pars[1,1], cover_pars[2,1])
-cover_2 <- mapply(rbeta(N, cover_pars[1,2], cover_pars[2,2]),FUN=max,cover_1)
+cover_2 <- mapply(rbeta(N, cover_pars[1,2], cover_pars[2,2]),FUN=max,cover_1) #### max(random proportion for IPV at 5, random proportion for IPV at 2)
 cover_3 <- mapply(rbeta(N, cover_pars[1,3], cover_pars[2,3]),FUN=max,cover_2)
 cover_4 <- rbeta(N, cover_pars[1,4], cover_pars[2,4])
  
@@ -162,14 +162,15 @@ for(i in 1:N){
 
 LPV_birth <- sweep(immune_dist_birth, MARGIN=3, STATS=vax_profile$LPV.at.birth,FUN="*")
 OPV_cov_2 <- sweep(cover_4*immune_dist_2,MARGIN=3,STATS=vax_profile$OPV.at.age.2,FUN="*")
+OPV_cov_5 <- sweep(cover_4*immune_dist_2,MARGIN=3,STATS=vax_profile$OPV.at.age.5,FUN="*") #### Added
 IPV_cov_2 <- sweep(cover_1*immune_dist_2,MARGIN=3,STATS=vax_profile$IPV.at.age.2,FUN="*")
-IPV_cov_5_pre <- sweep((cover_2-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.premandate,FUN="*")
-IPV_cov_5_post <- sweep((cover_3-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.postmandate,FUN="*")
-IPV_cov_2019 <- sweep((cover_3-cover_2)*immune_dist_2019,MARGIN=3,STATS=vax_profile$IPV.in.2019,FUN="*")
+IPV_cov_5_pre <- sweep(cover_2*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.premandate,FUN="*") #### Changed from sweep((cover_2-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.premandate,FUN="*")      #### Pre-mandate IPV coverage at 5 for those with no IPV at 2
+IPV_cov_5_post <- sweep(cover_3*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.postmandate,FUN="*") #### Changed from sweep((cover_3-cover_1)*immune_dist_5,MARGIN=3,STATS=vax_profile$IPV.at.age.5.postmandate,FUN="*")
+IPV_cov_2019 <- sweep(cover_3*immune_dist_2019,MARGIN=3,STATS=vax_profile$IPV.in.2019,FUN="*") #### Changed from sweep((cover_3-cover_2)*immune_dist_2019,MARGIN=3,STATS=vax_profile$IPV.in.2019,FUN="*")
 
-OPV <- LPV_birth + OPV_cov_2
+OPV <- LPV_birth + OPV_cov_2 + OPV_cov_5 
 
-IPV <- IPV_cov_2 + IPV_cov_5_pre + IPV_cov_5_post + IPV_cov_2019 
+IPV <- IPV_cov_2 + IPV_cov_5_pre + IPV_cov_5_post + IPV_cov_2019    
 
 IPV[1,,]
 
@@ -212,7 +213,7 @@ ratio_duration_fecal <- duration_fecal/fecal_shed_duration
 ratio_duration_oral <- duration_oral/oral_shed_duration # similar
 ratio_latent <- latent/latent_period
 
-pars.fecal <- cbind(rep(pars_fecal[1],N), pars_fecal[2]/ratio_duration_fecal)
+pars.fecal <- cbind(rep(pars_fecal[1],N), pars_fecal[2]/ratio_duration_fecal) #### rate par. equals to (pars_fecal[2]/duration_fecal)*fecal_shed_duration
 pars.oral <- cbind(rep(pars_oral[1], N), pars_oral[2]/ratio_duration_oral)
 pars.latent <- cbind(rep(pars_latent[1],N), pars_latent[2]/ratio_latent)
 
@@ -240,9 +241,9 @@ s_gen_pars_matrix <- matrix(sapply(s_gen_pars,FUN=function(x){unname(x$estimate)
 
 age_summed <- apply(stage_age_vax, MARGIN = c(1,3), FUN = sum) 
 
-susc_age <- sweep(-age_summed, MARGIN=2, STATS=age_dist, FUN ="+") # subtracting vaccinated from the age-stratified population
-
-susc_infectivity <- rowSums(sweep(susc_age, MARGIN=2, STATS=infectivity_age, FUN="*"))
+susc_age <- sweep(-age_summed, MARGIN=2, STATS=age_dist, FUN ="+") # subtracting vaccinated from the age-stratified population 
+#### to avoid negative values in `susc_age`, suggest `susc_age[which(susc_age<0)]=0`
+susc_infectivity <- rowSums(sweep(susc_age, MARGIN=2, STATS=infectivity_age, FUN="*")) 
 
 s_infectiousness <- susc_infectivity/susceptible
 

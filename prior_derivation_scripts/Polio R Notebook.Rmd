@@ -9,7 +9,6 @@ library(abind)
 ```
  
 ```{r set working directory to source file location,echo=F}
-
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 ```
 
@@ -19,42 +18,41 @@ str(census)
 ```
 
 ```{r DATA importing NY SIS data to get vaccination coverage}
-
-sis <- read.csv("NY_SIS.csv")
-str(sis)
-
-counties <- c("ROCKLAND","ORANGE","SULLIVAN","BRONX","KINGS","NEW YORK","QUEENS","RICHMOND")
-years <- c("2012-2013","2013-2014","2014-2015","2015-2016","2016-2017","2017-2018","2018-2019","2019-2020","2020-2021")
-
-get_coverage_list <- function(data, county, year, means=F){
- 
- if(length(county)>1 & length(year)>1){stop("only one of 'function' and 'year' may have length>1")}
- 
- n <- max(length(county),length(year))
- counties <- rep(county,n/length(county))
- years <- rep(year,n/length(year))
- 
- coverage_list <- vector("list",n) 
- 
- for(i in 1:n){
-  coverage_raw <- data$Percent.Immunized.Polio[data$County==counties[i] & data$Report.Period==years[i]]
-  coverage_filtered <- setdiff(coverage_raw, c(0,NA)) # removing NAs and zeros - the latter because most zeros appear to be anomalies (no exemptions reported and/or a deviation from otherwise moderate to high coverage)
-  coverage_list[[i]] <- coverage_filtered
- }
-
- names(coverage_list) <- if(length(county)>1){county}else if(length(year)>1){year}else{NULL}
- 
- out <- if(means==F){coverage_list}else{sapply(coverage_list,mean)}
- return(out)
- 
-}
-
-test<-get_coverage_list(sis, county=counties,year=years[9])
-boxplot(test,range=0)
-
-test <- get_coverage_list(sis,county=counties,year=years[9],mean=T)
-test
-
+#### COMMENTED: Codes in this chunk were not used.
+# sis <- read.csv("NY_SIS.csv")
+# str(sis)
+# 
+# counties <- c("ROCKLAND","ORANGE","SULLIVAN","BRONX","KINGS","NEW YORK","QUEENS","RICHMOND")
+# years <- c("2012-2013","2013-2014","2014-2015","2015-2016","2016-2017","2017-2018","2018-2019","2019-2020","2020-2021")
+# 
+# get_coverage_list <- function(data, county, year, means=F){
+#  
+#  if(length(county)>1 & length(year)>1){stop("only one of 'function' and 'year' may have length>1")}
+#  
+#  n <- max(length(county),length(year))
+#  counties <- rep(county,n/length(county))
+#  years <- rep(year,n/length(year))
+#  
+#  coverage_list <- vector("list",n) 
+#  
+#  for(i in 1:n){
+#   coverage_raw <- data$Percent.Immunized.Polio[data$County==counties[i] & data$Report.Period==years[i]]
+#   coverage_filtered <- setdiff(coverage_raw, c(0,NA)) # removing NAs and zeros - the latter because most zeros appear to be anomalies (no exemptions reported and/or a deviation from otherwise moderate to high coverage)
+#   coverage_list[[i]] <- coverage_filtered
+#  }
+# 
+#  names(coverage_list) <- if(length(county)>1){county}else if(length(year)>1){year}else{NULL}
+#  
+#  out <- if(means==F){coverage_list}else{sapply(coverage_list,mean)}
+#  return(out)
+#  
+# }
+# 
+# test<-get_coverage_list(sis, county=counties,year=years[9])
+# boxplot(test,range=0)
+# 
+# test <- get_coverage_list(sis,county=counties,year=years[9],mean=T)
+# test
 ```
 
 ```{r DATA generating age distributions for Rockland, Orange, Sullivan, and NYC}
@@ -80,9 +78,8 @@ age_cats <- mapply(0:99,FUN=paste0, rep("-",100),1:100)
 age <- array(NA, dim=c(100,length(counties)), dimnames=list(age_cats,counties_abbr))
 
 for(i in 1:length(counties)){
-  age[,i]<-rep(c(age_props[1,i]/4,age_props[2:17,i]/5,age_props[18,i]/16),rep(c(4,5,16),c(1,16,1)))
+  age[,i]<-rep(c(age_props[1,i]/5,age_props[2:17,i]/5,age_props[18,i]/15),rep(c(5,5,15),c(1,16,1))) #### Updated from age[,i]<-rep(c(age_props[1,i]/4,age_props[2:17,i]/5,age_props[18,i]/16),rep(c(4,5,16),c(1,16,1)))
 }
-
 head(age)
 
 save(age, file = "NY census 2019")
@@ -90,26 +87,29 @@ save(age, file = "NY census 2019")
 
 ```{r VALUE defining parameter values from Kalkowska et al. }
 
-immune_stage_duration <- 1 #duration of each immune stage
-duration_fecal <- 27.8 # susceptible/unvaccinated 
-duration_oral <- 13.4 # sim. 
-latent_period <- 3
-prop_oral <- 0.83
+immune_stage_duration <- 1 #duration of each immune stage  #### Checked--p.252, Talbe I; it takes 4 years on average to move from the most recent stage to the last waning stage
+duration_fecal <- 27.8 # susceptible/unvaccinated          #### Checked--p.254, Table II
+duration_oral <- 13.4 # sim.                               #### Checked--p.254, Table II
+latent_period <- 3                                         #### 3 days Checked--p.252, Table I 
+prop_oral <- 0.83                                          #### Checked--p.255, Table III
 
-vax_effect <- matrix(c(0.28,0.78,
-                       0.41,0.77,
-                       0.88,0.79,
-                       0.36,0.68,
-                       0.54,0.72),ncol=2,byrow=T,dimnames=list(c("susceptibility","infectiousness_fecal","infectiousness_oral","shed_duration_fecal","shed_duration_oral"),c("IPV","OPV"))) 
+vax_effect <- matrix(c(0.28,0.78,                          #### susceptibility; Checked--p.254, Table II
+                       0.41,0.77,                          #### infectiousness_fecal; Checked--p.254, Table II
+                       0.88,0.79,                          #### infectiousness_oral; Checked--p.254, Table II
+                       0.36,0.68,                          #### shed_duration_fecal=1-17.7/27.8=0.36 for IPVx3, 1-8.9/27.8=0.68 for OPVx2; Checked--p.254, Table II
+                       0.54,0.72),ncol=2,byrow=T,          #### shed_duration_oral=1-6.1/13.4=0.36 for IPVx3; 1-3.7/13.4=0.72 for OPVx2; Checked--p.254, Table II
+                     dimnames=list(c("susceptibility","infectiousness_fecal","infectiousness_oral","shed_duration_fecal","shed_duration_oral"),c("IPV","OPV"))) 
 # initial (first immune stage) reductions in susceptibility, infectiousness, and duration of shedding relative to unvaccinated)
 
-vax_residual_effect <- matrix(c(0.02,0.38,
+vax_residual_effect <- matrix(
+                     c(1e-10,0.38, #### Updated to 1e-10 from 0.02
                        0.37,0.91,
                        0.99,0.89,
                        0.42,0.87,
-                       0.93,0.97),ncol=2,byrow=T,dimnames=dimnames(vax_effect)) # fraction of initial vaccine effect that remains in the last immune stage))
+                       0.93,0.97),ncol=2,byrow=T,
+                       dimnames=dimnames(vax_effect)) # fraction of initial vaccine effect that remains in the last immune stage))
 
-shedding_weights <- c(12,40,12,4)/68
+shedding_weights <- c(12,40,12,4)/68                      
 ```
 
 ```{r FUNCTION immune_stage_dist function: assign waning stage as a function of time since vaccination}
@@ -117,20 +117,20 @@ shedding_weights <- c(12,40,12,4)/68
 immune_stage_dist<-function(t,d=immune_stage_duration,n=5){ # t = time since vaccination; d = duration of each immune stage; n = number of stages
   dist<-rep(0,n)
   s<-min(1+floor(t/d),n)
-  if(s>=1){dist[s]<-1}
+  if(s>=1){dist[s]<-1} #### Q: under what condition will S be 0 or negative? 
   return(dist)
 }
+
 ```
 
 ```{r VALUE defining vaccination coverage}
-
-coverage_1 <- 0.6 # coverage at age 2 
-coverage_2 <- 0.9 # coverage at age 5 - pre-mandate
-coverage_3 <- 0.95 # coverage at age 5 (post-mandate) OR in 2019 (for K-12 at the time)
+coverage_1 <- x # coverage at age 2 
+coverage_2 <- x #### updated from 0.9 # coverage at age 5 - pre-mandate
+coverage_3 <- y  #### updated from 0.95 # coverage at age 5 (post-mandate) OR in 2019 (for K-12 at the time)
+coverage_4 <- 0.9
 ```
 
 ```{r OBJECT age_dist: age distribution for specified counties}
-
 counties <- colnames(age)
 counties
 
@@ -144,7 +144,7 @@ age_dist <- age_totals/sum(age_totals) # age distribution for the counties speci
 ```{r OBJECT stage_age_vax: sorting population by age, vaccine received, and waning stage}
 ages <- 0:99
 
-stage_age_vax <- array(0,dim=c(5,100,2))
+stage_age_vax <- array(0,dim=c(5,100,2)) # dim: stage, age, IPV/OPV
 
 vax_profile <- read.csv("age vaccination profiles.csv")
 str(vax_profile)
@@ -152,13 +152,14 @@ str(vax_profile)
 LPV_birth <- vax_profile$LPV.at.birth
 OPV_cov_2 <- coverage_4*vax_profile$OPV.at.age.2 # coverage with OPV at age 2
 IPV_cov_2 <- coverage_1*vax_profile$IPV.at.age.2 # coverage with IPV at age 2
-IPV_cov_5_pre <- (coverage_2-coverage_1)*vax_profile$IPV.at.age.5.premandate # coverage with IPV at age 5 up to 2019
-IPV_cov_2019 <- (coverage_3 - coverage_2)*vax_profile$IPV.in.2019 # coverage with IPV in 2019 (when religious vaccine exemptions were invalidated - applicable only to K-12)
-IPV_cov_5_post <- (coverage_3 - coverage_1)*vax_profile$IPV.at.age.5.postmandate # coverage with IPV at age 5 from 2020-onward
+IPV_cov_5_pre <- coverage_2*vax_profile$IPV.at.age.5.premandate #### Changed from (coverage_2 - coverage_1)*vax_profile$IPV.at.age.5.premandate # coverage with IPV at age 5 up to 2019
+#### Line 158, can we account for boosting at age 5 by IPV_cov_5_pre <- coverage_2 * vax_profile$IPV.at.age.5.premandate?
+IPV_cov_2019  <- coverage_3*vax_profile$IPV.in.2019 #### Changed from (coverage_3 - coverage_2)*vax_profile$IPV.in.2019 # coverage with IPV in 2019 (when religious vaccine exemptions were invalidated - applicable only to K-12) #### implicitly assume no boosting at age 5.
+IPV_cov_5_post <- coverage_3*vax_profile$IPV.at.age.5.postmandate #### Changed from (coverage_3 - coverage_1)*vax_profile$IPV.at.age.5.postmandate # coverage with IPV at age 5 from 2020-onward
 
-stage_age_vax[,,1] <- t(IPV_cov_2*t(sapply(ages-2,immune_stage_dist))+ (IPV_cov_5_pre + IPV_cov_5_post)*t(sapply(ages-5,immune_stage_dist)) + IPV_cov_2019*t(sapply(rep(3,100),immune_stage_dist)))
+stage_age_vax[,,1] <- t(IPV_cov_2*t(sapply(ages-2,immune_stage_dist)) + (IPV_cov_5_pre + IPV_cov_5_post)*t(sapply(ages-5,immune_stage_dist)) + IPV_cov_2019*t(sapply(rep(3,100),immune_stage_dist))) #### Checked that 2022 is 3 years since 2019 and thus ppl should be in waning stage 4.
 
-stage_age_vax[,,2] <- t( LPV_birth*t(sapply(ages,immune_stage_dist))+ OPV_cov_2*t(sapply(ages-2,immune_stage_dist)))
+stage_age_vax[,,2] <- t(LPV_birth*t(sapply(ages,immune_stage_dist))+ OPV_cov_2*t(sapply(ages-2,immune_stage_dist)))
 
 stage_age_vax <- sweep(stage_age_vax,MARGIN=2,STATS=age_dist,FUN="*")
 
@@ -166,12 +167,11 @@ sum(stage_age_vax)
 ```
 
 ```{r FUNCTION wane: obtain stage-specific vaccine effectiveness}
-
 wane <- function(effect, residual, nsteps=5, shape=5){ 
   # takes vaccine effect in first immune stage, residual effect in last immune stage, number of steps and shape parameter and gives value for all steps, including first and last
   x_initial <- 1-effect
   x_final <- 1-residual*effect
-  x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps)+1)/nsteps)^shape
+  x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps))/(nsteps-1))^shape #### Changed from x <- x_final - (x_final-x_initial)*((nsteps-(1:nsteps)+1)/nsteps)^shape 
   return(1-x)
 }
 ```
@@ -200,9 +200,9 @@ time_dist <- function(duration, weights = shedding_weights, n = 2e5){ # length(w
     
     breaks <- rep(NA,k-1); for(j in 1:(k-1)){breaks[j] <- sum(r[i,1:j])}
     
-    interval <- if(t[i]>max(breaks)){k}else{min(which(t[i]<breaks))}
+    interval <- if(t[i]>max(breaks)){k}else{min(which(t[i]<breaks))} # return the current stage i of a random person out of 4 stages
     
-    if(x[i]<=weights[interval]){times<-c(times,t[i])}else{}
+    if(x[i]<=weights[interval]){times<-c(times,t[i])}else{} # get a time for transmission and put it as times
   }
   
   pars <- fitdist(times,"gamma", method="mle")$estimate
@@ -228,7 +228,7 @@ peak_conc <- function(age, Nab){ # age in years
   
   Smax <- 6.7
   Smin <- 4.3
-  tau<-12
+  tau<-1 #### Changed from 12
   k<-0.056
   
   y <- if(age < 0.5){Smax}else{
@@ -248,7 +248,7 @@ viral_conc <- function(t, age, Nab){ # age in years (carried over from peak_conc
   xi <- 0.32 # time-dependent scale
   
   y <- if(t==0){0}else{
-    max(0, (peak/t)*exp( eta - 0.5*(nu^2) - ((log(t) - eta)^2)/(2*(nu + xi*log(t))^2) ))
+    max(0, (peak/t)*exp( eta - 0.5*(nu^2) - ((log(t) - eta)^2)/(2*(nu + xi*log(t))^2) )) #### keep max(0,...) for there is no biological reason to give a lower bound on shedding.
   }
    
   return(y)
@@ -260,7 +260,7 @@ prob_infect <- function(Nab, dose){ # probability of becoming infected
   beta <- 2.3 # scale parameter (WPV)
   gamma <- 0.46 # immunity-dependent shape parameter exponent
   
-  y <- 1 - (1 + dose/beta)^(-alpha*Nab^(-gamma))
+  y <- 1 - (1 + dose/beta)^(-alpha*Nab^(-gamma))       #### Correspond to Eq.E p.7 of Famulare et al. suppl materials
   return(y)
 }
 
@@ -337,7 +337,7 @@ transmit_time <- vector("list",2)
 route <- sample(1:2,size=1e4,replace=T,prob=c(1-prop_oral,prop_oral))
 x <- unname(table(factor(route,levels=1:2)))
   
-transmit_time[[1]] <- rgamma(x[1],pars_fecal[1],pars_fecal[2])+rgamma(x[1],2,2/latent_period)
+transmit_time[[1]] <- rgamma(x[1],pars_fecal[1],pars_fecal[2])+rgamma(x[1],2,2/latent_period) #### 2 stages Checked--p.252, Table I 
 transmit_time[[2]] <- rgamma(x[2],pars_oral[1],pars_oral[2])+rgamma(x[2],2,2/latent_period)
   
 times <- unlist(transmit_time)
@@ -359,20 +359,21 @@ s_infectiousness # not a model parameter - infectiousness of partially immune wi
 ```
 
 ```{r OBJECT p_stage_age_vax: sorting partially susceptible population by age, vaccine received, and waning stage}
-
-p_stage_age_vax <- abind((1-vax_effect_by.stage[,"IPV", "susceptibility"])*stage_age_vax[,,1],(1-vax_effect_by.stage[,"OPV", "susceptibility"])*stage_age_vax[,,2],along=3)/partial # distribution of age/vaccine/stage among non-refractory vaccine recipients
+#### Get prop. not protected by IPV / OPV
+p_stage_age_vax <- abind((1-vax_effect_by.stage[,"IPV", "susceptibility"])*stage_age_vax[,,1],
+                         (1-vax_effect_by.stage[,"OPV", "susceptibility"])*stage_age_vax[,,2],along=3)/partial # distribution of age/vaccine/stage among non-refractory vaccine recipients
 
 ```
 
 ```{r PARAMETER p_infectiousness: relative infectiousness of partially immune}
 
-relative_duration <- 1-vax_effect_by.stage[,,c("shed_duration_fecal","shed_duration_oral")]
+relative_duration <- 1-vax_effect_by.stage[,,c("shed_duration_fecal","shed_duration_oral")]#### 0.6 (most recent immune) :1 (fully susc)
 
 relative_infectiousness <- 1-vax_effect_by.stage[,,c("infectiousness_fecal","infectiousness_oral")]
 
-relative_total_shedding <- relative_duration*relative_infectiousness; dimnames(relative_total_shedding) <- list(NULL,c("IPV","OPV"),c("fecal","oral"))
+relative_total_shedding <- relative_duration*relative_infectiousness; dimnames(relative_total_shedding) <- list(NULL,c("IPV","OPV"),c("fecal","oral")) 
 
-relative_transmission_prob_route <- abind((1-prop_oral)*relative_total_shedding[,,"fecal"],prop_oral*relative_total_shedding[,,"oral"],along=3); dimnames(relative_transmission_prob_route) <- list(NULL,c("IPV","OPV"),c("fecal","oral"))
+relative_transmission_prob_route <- abind((1-prop_oral)*relative_total_shedding[,,"fecal"],prop_oral*relative_total_shedding[,,"oral"],along=3); dimnames(relative_transmission_prob_route) <- list(NULL,c("IPV","OPV"),c("fecal","oral"))    
   
 relative_transmission_prob <- apply(relative_transmission_prob_route, 1:2, sum)
   
